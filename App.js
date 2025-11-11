@@ -1,6 +1,6 @@
 // App.js
 import React, { useState, useEffect } from 'react';
-import { View, Text } from 'react-native'; // Importe View e Text para o Loading
+import { View, Text } from 'react-native'; 
 import { NavigationContainer } from '@react-navigation/native';
 import { createNativeStackNavigator } from '@react-navigation/native-stack';
 import { createBottomTabNavigator } from '@react-navigation/bottom-tabs';
@@ -19,6 +19,9 @@ import HomeScreen from './screens/HomeScreen';
 import RequestScreen from './screens/RequestScreen';
 import LearnScreen from './screens/LearnScreen';
 import ProfileScreen from './screens/ProfileScreen';
+
+// A Nova Tela de Reporte
+import ReportProblemScreen from './screens/ReportProblemScreen'; // <-- IMPORTADO
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -71,7 +74,6 @@ export default function App() {
   }, []);
 
   if (loading) {
-    // Tela de carregamento enquanto o Supabase checa a sessão
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center' }}>
         <Text>Carregando...</Text>
@@ -81,19 +83,30 @@ export default function App() {
 
   return (
     <NavigationContainer>
+      {/* É AQUI QUE O STACK.NAVIGATOR FICA.
+        Ele é o navegador principal que decide se mostra
+        o Login ou o App principal.
+      */}
       <Stack.Navigator 
-        // A tela inicial é definida aqui:
-        // Se o usuário estiver logado, comece em "AppTabs"
-        // Se não, comece em "Welcome"
         initialRouteName={session && session.user ? "AppTabs" : "Welcome"}
       >
-        {/* Agora, TODAS as telas são definidas no mesmo navegador */}
+        {/* Grupo de telas Pós-Login */}
         <Stack.Screen name="AppTabs" component={AppTabs} options={{ headerShown: false }} />
+        
+        {/* Grupo de telas de Autenticação */}
         <Stack.Screen name="Welcome" component={WelcomeScreen} options={{ headerShown: false }} />
         <Stack.Screen name="CitizenAuth" component={CitizenAuthScreen} options={{ headerShown: true, title: 'Acesso do Cidadão' }} />
         <Stack.Screen name="CompanyAuth" component={CompanyAuthScreen} options={{ headerShown: true, title: 'Acesso da Empresa' }} />
         <Stack.Screen name="RegisterChoice" component={RegisterChoiceScreen} options={{ headerShown: true, title: 'Criar uma conta' }} />
         <Stack.Screen name="ForgotPassword" component={ForgotPasswordScreen} options={{ headerShown: true, title: 'Recuperar Senha' }} />
+
+        {/* Telas que você acessa de dentro do AppTabs (como o Reporte) */}
+        <Stack.Screen 
+          name="ReportProblem" 
+          component={ReportProblemScreen}
+          options={{ headerShown: false }} // O cabeçalho é personalizado
+        />
+
       </Stack.Navigator>
     </NavigationContainer>
   );

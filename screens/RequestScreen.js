@@ -32,7 +32,7 @@ const UsedServiceCard = ({ icon, iconColor, iconBgColor, title, subtitle, onPres
 export default function RequestScreen({ navigation }) {
   
   // (No futuro, você precisará criar essas telas e adicioná-las ao App.js)
-  const onReportProblem = () => { /* navigation.navigate('ReportProblem'); */ };
+  const onReportProblem = () => { navigation.navigate('ReportProblem'); };
   const onScheduleService = () => { /* navigation.navigate('ScheduleService'); */ };
   const onFindDisposalSite = () => { /* navigation.navigate('FindDisposalSite'); */ };
   const onCataTreco = () => { /* navigation.navigate('ScheduleCataTreco'); */ };
