@@ -1,4 +1,3 @@
-// screens/ReportProblemScreen.js
 import React, { useState, useEffect } from "react";
 import {
   View,
@@ -10,7 +9,10 @@ import {
   Alert,
   Modal,
   FlatList,
+  ActivityIndicator, // Adicionado para o ícone de loading do GPS
 } from "react-native";
+// 1. Importação da biblioteca Safe Area
+import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { supabase } from "../utils/supabaseClient";
@@ -27,16 +29,15 @@ const STATIC_PROBLEM_TYPES = [
 ];
 
 export default function ReportProblemScreen({ navigation }) {
-  const [problemType, setProblemType] = useState(null); // (Guarda o ID: 'static_lixo_acumulado')
-  const [problemTypeLabel, setProblemTypeLabel] = useState(""); // (Guarda o Texto: "Lixo acumulado")
+  const [problemType, setProblemType] = useState(null);
+  const [problemTypeLabel, setProblemTypeLabel] = useState("");
   const [description, setDescription] = useState("");
   const [address, setAddress] = useState("");
   const [loading, setLoading] = useState(false);
   const [problemTypesList, setProblemTypesList] = useState([]);
-  const [isModalVisible, setIsModalVisible] = useState(false); // Estado para o Modal
+  const [isModalVisible, setIsModalVisible] = useState(false);
 
   useEffect(() => {
-    // Busca os tipos de chamado do Supabase
     const fetchProblemTypes = async () => {
       const { data, error } = await supabase
         .from("chamadotipos")
@@ -48,7 +49,7 @@ export default function ReportProblemScreen({ navigation }) {
           "Erro ao buscar tipos (usando lista estática):",
           error?.message
         );
-        setProblemTypesList(STATIC_PROBLEM_TYPES); // <- PLANO B
+        setProblemTypesList(STATIC_PROBLEM_TYPES);
       } else {
         const types = data.map((item) => ({
           label: item.nome_servico,
@@ -60,9 +61,8 @@ export default function ReportProblemScreen({ navigation }) {
     fetchProblemTypes();
   }, []);
 
-  // Pega a localização atual (corrigido com a trava de loading)
   const handleGetLocation = async () => {
-    if (loading) return; // <-- CORREÇÃO DO BUG DE CLIQUE REPETIDO
+    if (loading) return;
 
     let { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") {
@@ -73,18 +73,23 @@ export default function ReportProblemScreen({ navigation }) {
       return;
     }
     setLoading(true);
-    let location = await Location.getCurrentPositionAsync({});
-    let geocode = await Location.reverseGeocodeAsync(location.coords);
-    if (geocode.length > 0) {
-      const g = geocode[0];
-      setAddress(`${g.street}, ${g.streetNumber}, ${g.subregion}`);
-    } else {
-      setAddress("Não foi possível encontrar o endereço");
+    try {
+      let location = await Location.getCurrentPositionAsync({});
+      let geocode = await Location.reverseGeocodeAsync(location.coords);
+      if (geocode.length > 0) {
+        const g = geocode[0];
+        const formattedAddress = `${g.street || ""}, ${g.streetNumber || ""}, ${g.subregion || ""}`;
+        setAddress(formattedAddress);
+      } else {
+        setAddress("Não foi possível encontrar o endereço");
+      }
+    } catch (error) {
+      Alert.alert("Erro", "Falha ao obter localização.");
+    } finally {
+      setLoading(false);
     }
-    setLoading(false);
   };
 
-  // Envia o reporte para o Supabase
   const handleSubmitReport = async () => {
     if (!problemType || !description || !address) {
       Alert.alert(
@@ -93,7 +98,7 @@ export default function ReportProblemScreen({ navigation }) {
       );
       return;
     }
-    if (loading) return; // Trava para o botão de submit
+    if (loading) return;
     setLoading(true);
 
     const {
@@ -124,15 +129,15 @@ export default function ReportProblemScreen({ navigation }) {
     setLoading(false);
   };
 
-  // Função para quando o usuário seleciona um item no Modal
   const onProblemTypeSelect = (item) => {
-    setProblemType(item.value); // Salva o ID
-    setProblemTypeLabel(item.label); // Salva o texto para mostrar no "botão"
-    setIsModalVisible(false); // Fecha o Modal
+    setProblemType(item.value);
+    setProblemTypeLabel(item.label);
+    setIsModalVisible(false);
   };
 
   return (
-    <View style={styles.container}>
+    // 2. Troca de View por SafeAreaView
+    <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
 
       {/* Cabeçalho Vermelho */}
@@ -154,7 +159,6 @@ export default function ReportProblemScreen({ navigation }) {
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
       >
-        {/* --- O "BOTÃO" QUE SUBSTITUIU O PICKER --- */}
         <Text style={styles.label}>Tipo de problema</Text>
         <TouchableOpacity
           style={styles.pickerButton}
@@ -170,7 +174,6 @@ export default function ReportProblemScreen({ navigation }) {
           <Ionicons name="chevron-down" size={20} color="#666" />
         </TouchableOpacity>
 
-        {/* Descrição */}
         <Text style={styles.label}>Descrição</Text>
         <TextInput
           style={styles.inputMultiline}
@@ -181,7 +184,6 @@ export default function ReportProblemScreen({ navigation }) {
           onChangeText={setDescription}
         />
 
-        {/* Endereço */}
         <Text style={styles.label}>Endereço</Text>
         <View style={styles.addressContainer}>
           <TextInput
@@ -191,19 +193,22 @@ export default function ReportProblemScreen({ navigation }) {
             onChangeText={setAddress}
           />
           <TouchableOpacity onPress={handleGetLocation} disabled={loading}>
-            <Ionicons name="location-outline" size={24} color="#007BFF" />
+             {/* Pequeno detalhe visual: mostrar loading no ícone se estiver buscando */}
+            {loading && address === "" ? (
+               <ActivityIndicator size="small" color="#007BFF" />
+            ) : (
+               <Ionicons name="location-outline" size={24} color="#007BFF" />
+            )}
           </TouchableOpacity>
         </View>
         <Text style={styles.locationHelper}>Ou use sua localização atual</Text>
 
-        {/* Foto */}
         <Text style={styles.label}>Foto (opcional)</Text>
         <TouchableOpacity style={styles.photoBox}>
           <Ionicons name="camera-outline" size={40} color="#ccc" />
           <Text style={styles.photoText}>Tirar ou escolher foto</Text>
         </TouchableOpacity>
 
-        {/* Botão Enviar */}
         <TouchableOpacity
           style={styles.submitButton}
           onPress={handleSubmitReport}
@@ -216,7 +221,7 @@ export default function ReportProblemScreen({ navigation }) {
         </TouchableOpacity>
       </ScrollView>
 
-      {/* --- O MODAL (POP-UP) QUE SUBSTITUIU O PICKER --- */}
+      {/* Modal */}
       <Modal
         animationType="slide"
         transparent={true}
@@ -247,18 +252,18 @@ export default function ReportProblemScreen({ navigation }) {
           </View>
         </View>
       </Modal>
-    </View>
+    </SafeAreaView>
   );
 }
 
-// --- Estilos ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: "#D92D20", // Vermelho escuro
   },
   header: {
-    paddingTop: 60,
+    // 3. Padding ajustado para SafeAreaView
+    paddingTop: 20, 
     paddingHorizontal: 20,
     paddingBottom: 20,
   },
@@ -284,7 +289,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flex: 1,
-    backgroundColor: "#F0F2F5", // Fundo cinza claro
+    backgroundColor: "#F0F2F5",
     borderTopLeftRadius: 25,
     borderTopRightRadius: 25,
   },
@@ -297,7 +302,6 @@ const styles = StyleSheet.create({
     color: "#333",
     marginBottom: 8,
   },
-  // Botão Falso do Picker
   pickerButton: {
     flexDirection: "row",
     justifyContent: "space-between",
@@ -317,7 +321,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
     color: "#333",
   },
-  // Inputs
   inputMultiline: {
     backgroundColor: "#fff",
     borderWidth: 1,
@@ -349,7 +352,6 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginBottom: 15,
   },
-  // Upload de Foto
   photoBox: {
     backgroundColor: "#fff",
     borderWidth: 2,
@@ -365,7 +367,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#aaa",
   },
-  // Botão Enviar
   submitButton: {
     flexDirection: "row",
     backgroundColor: "#007BFF",
@@ -382,7 +383,6 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     marginLeft: 10,
   },
-  // Estilos do Modal
   modalBackdrop: {
     flex: 1,
     justifyContent: "flex-end",

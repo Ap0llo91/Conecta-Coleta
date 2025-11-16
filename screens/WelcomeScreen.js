@@ -1,14 +1,18 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-// Lembre-se de instalar os ícones!
-// No terminal, rode: npx expo install @expo/vector-icons
+// ATUALIZAÇÃO: Usando a biblioteca correta para evitar problemas com notch/status bar
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons'; 
 import Logo from '../components/Logo';
 
 export default function WelcomeScreen({ navigation }) {
   return (
-    <View style={styles.container}>
-      {<Logo style={styles.logo} />}
+    // Trocámos View por SafeAreaView aqui
+    <SafeAreaView style={styles.container}>
+      
+      {/* Removidas as chaves extras {} ao redor do Logo */}
+      <Logo style={styles.logo} />
+      
       <Text style={styles.title}>Conecta Coleta</Text>
       <Text style={styles.subtitle}>Bem-vindo! Como deseja entrar?</Text>
 
@@ -37,20 +41,20 @@ export default function WelcomeScreen({ navigation }) {
       </View>
 
       <TouchableOpacity onPress={() => navigation.navigate('RegisterChoice')}>
-        <Text style={styles.createAccountText}>Primeira vez aqui? <Text style={styles.createAccountLink}>Criar uma conta</Text></Text>
+        <Text style={styles.createAccountText}>
+          Primeira vez aqui? <Text style={styles.createAccountLink}>Criar uma conta</Text>
+        </Text>
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 
-// --- ESTILOS QUE FALTAVAM ---
-// (Estes são os estilos do seu Figma original)
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#F0F2F5', // Cor de fundo clara
+    backgroundColor: '#F0F2F5', 
     alignItems: 'center',
-    justifyContent: 'center', // Adicionado para centralizar tudo
+    justifyContent: 'center', 
     padding: 20,
   },
   header: {
@@ -75,15 +79,15 @@ const styles = StyleSheet.create({
   subtitle: {
     fontSize: 18,
     color: '#666',
-    marginBottom: 50, // Adicionado espaçamento
+    marginBottom: 50, 
   },
   buttonsContainer: {
-    width: '90%', // Aumentado para 90%
+    width: '90%', 
     marginBottom: 30,
   },
   citizenButton: {
     flexDirection: 'row',
-    backgroundColor: '#3498db', // Azul principal
+    backgroundColor: '#3498db', 
     borderRadius: 10,
     padding: 20,
     alignItems: 'center',
@@ -96,7 +100,7 @@ const styles = StyleSheet.create({
   },
   companyButton: {
     flexDirection: 'row',
-    backgroundColor: '#FFD700', // Amarelo principal
+    backgroundColor: '#FFD700', 
     borderRadius: 10,
     padding: 20,
     alignItems: 'center',

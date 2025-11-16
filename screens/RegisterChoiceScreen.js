@@ -1,12 +1,15 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
+// ATUALIZAÇÃO: Usando a biblioteca correta para evitar problemas com notch/status bar
+import { SafeAreaView } from 'react-native-safe-area-context';
 // Lembre-se de instalar os ícones: npx expo install @expo/vector-icons
 import { MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons'; 
 import Logo from '../components/Logo'; // Usando o componente SVG que criamos
 
 export default function RegisterChoiceScreen({ navigation }) {
   return (
-    <View style={styles.container}>
+    // Trocámos View por SafeAreaView aqui para garantir o layout seguro
+    <SafeAreaView style={styles.container}>
       {/* O <Stack.Screen> no App.js já define o título "Criar uma conta" */}
       
       {/* Cabeçalho */}
@@ -47,7 +50,7 @@ export default function RegisterChoiceScreen({ navigation }) {
       <TouchableOpacity onPress={() => navigation.goBack()}> 
         <Text style={styles.createAccountText}>Já tem uma conta? <Text style={styles.createAccountLink}>Entrar</Text></Text>
       </TouchableOpacity>
-    </View>
+    </SafeAreaView>
   );
 }
 

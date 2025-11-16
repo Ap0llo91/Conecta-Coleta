@@ -1,91 +1,85 @@
-// screens/ForgotPasswordScreen.js
 import React from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+// 1. Importação correta
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons'; 
 
-// (Opcional, mas recomendado) Importe o Supabase para a lógica real
-// import { supabase } from '../utils/supabaseClient'; // (Certifique-se que o caminho está correto)
+// (Opcional) import { supabase } from '../utils/supabaseClient'; 
 
 export default function ForgotPasswordScreen({ navigation }) {
   const [email, setEmail] = React.useState('');
   const [loading, setLoading] = React.useState(false);
 
-  // Esta é a função que será chamada quando o usuário clicar em "Enviar"
   const handlePasswordReset = async () => {
     if (loading) return;
     setLoading(true);
 
-    // --- LÓGICA REAL DO SUPABASE (para o futuro) ---
-    // const { data, error } = await supabase.auth.resetPasswordForEmail(email, {
-    //   redirectTo: 'https://seusite.com/resetar-senha', // Você precisa configurar isso no Supabase
-    // });
-    //
-    // if (error) {
-    //   Alert.alert('Erro', error.message);
-    // } else {
-    //   Alert.alert('Sucesso', 'Link de recuperação enviado para o seu e-mail!');
-    //   navigation.goBack(); // Volta para a tela de login
-    // }
-
-    // --- LÓGICA DE PROTÓTIPO (para agora) ---
-    // Apenas simula um delay e mostra um alerta
+    // Simulação
     setTimeout(() => {
       Alert.alert(
         'Verifique seu E-mail',
         'Se uma conta com este e-mail existir, um link de recuperação será enviado.',
-        [{ text: 'OK', onPress: () => navigation.goBack() }] // Volta para a tela de login
+        [{ text: 'OK', onPress: () => navigation.goBack() }] 
       );
       setLoading(false);
-    }, 1500); // Simula 1.5s de espera
+    }, 1500); 
   };
 
   return (
-    <ScrollView style={{flex: 1}} contentContainerStyle={styles.container}>
-      {/* Ícone */}
-      <View style={styles.iconContainer}>
-        <Ionicons name="mail-unread-outline" size={80} color="#007BFF" />
-      </View>
+    // 2. SafeAreaView envolvendo a tela
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={{flex: 1}} contentContainerStyle={styles.container}>
+        {/* Ícone */}
+        <View style={styles.iconContainer}>
+          <Ionicons name="mail-unread-outline" size={80} color="#007BFF" />
+        </View>
 
-      {/* Texto Explicativo */}
-      <Text style={styles.title}>Esqueceu sua senha?</Text>
-      <Text style={styles.subtitle}>
-        Sem problemas. Digite seu e-mail abaixo e enviaremos um link para você redefinir sua senha.
-      </Text>
+        {/* Texto Explicativo */}
+        <Text style={styles.title}>Esqueceu sua senha?</Text>
+        <Text style={styles.subtitle}>
+          Sem problemas. Digite seu e-mail abaixo e enviaremos um link para você redefinir sua senha.
+        </Text>
 
-      {/* Formulário */}
-      <View style={styles.formContainer}>
-        <Text style={styles.label}>Email</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="seu@email.com"
-          keyboardType="email-address"
-          autoCapitalize="none"
-          value={email}
-          onChangeText={setEmail}
-        />
-        
-        <TouchableOpacity 
-          style={[styles.button, styles.blueButton]} 
-          onPress={handlePasswordReset}
-          disabled={loading}
-        >
-          <Text style={styles.buttonText}>
-            {loading ? 'Enviando...' : 'Enviar link de recuperação'}
-          </Text>
-        </TouchableOpacity>
-      </View>
-    </ScrollView>
+        {/* Formulário */}
+        <View style={styles.formContainer}>
+          <Text style={styles.label}>Email</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="seu@email.com"
+            keyboardType="email-address"
+            autoCapitalize="none"
+            value={email}
+            onChangeText={setEmail}
+          />
+          
+          <TouchableOpacity 
+            style={[styles.button, styles.blueButton]} 
+            onPress={handlePasswordReset}
+            disabled={loading}
+          >
+            <Text style={styles.buttonText}>
+              {loading ? 'Enviando...' : 'Enviar link de recuperação'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 // --- Estilos ---
 const styles = StyleSheet.create({
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fff', // Garante fundo branco na área segura
+  },
   container: {
     flexGrow: 1,
     backgroundColor: '#fff',
     alignItems: 'center',
     padding: 20,
-    paddingTop: 40,
+    // 3. Padding ajustado. SafeAreaView cuida do topo, deixamos um pouco para respiro.
+    paddingTop: 20, 
   },
   iconContainer: {
     marginTop: 20,
@@ -133,5 +127,8 @@ const styles = StyleSheet.create({
     backgroundColor: '#007BFF',
   },
   buttonText: {
-    },
+    color: '#fff',
+    fontSize: 16,
+    fontWeight: 'bold',
+  },
 });

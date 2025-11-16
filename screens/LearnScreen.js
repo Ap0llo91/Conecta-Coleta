@@ -1,11 +1,11 @@
-// screens/LearnScreen.js
 import React from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
+// 1. Importação correta para Safe Area
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
-// Componente de Link (os cards brancos de navegação)
-// É parecido com o InfoCard, mas mais simples
+// Componente de Link
 const LinkCard = ({ icon, iconBgColor, iconColor, title, onPress }) => (
   <TouchableOpacity style={styles.linkCard} onPress={onPress}>
     <View style={[styles.linkIconContainer, { backgroundColor: iconBgColor }]}>
@@ -18,7 +18,7 @@ const LinkCard = ({ icon, iconBgColor, iconColor, title, onPress }) => (
   </TouchableOpacity>
 );
 
-// Componente de Card de Estatística (para o Impacto)
+// Componente de Card de Estatística
 const StatCard = ({ icon, value, label, iconColor, iconBgColor }) => (
   <View style={styles.statCard}>
     <View style={[styles.statIconContainer, { backgroundColor: iconBgColor }]}>
@@ -31,14 +31,15 @@ const StatCard = ({ icon, value, label, iconColor, iconBgColor }) => (
 
 export default function LearnScreen({ navigation }) {
   
-  // Funções de placeholder para onde os botões levarão
+  // Funções de placeholder
   const onColetaSeletiva = () => {};
   const onBeneficios = () => {};
   const onDicas = () => {};
   const onFAQ = () => {};
 
   return (
-    <View style={styles.container}>
+    // 2. Trocamos View por SafeAreaView
+    <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
       
       {/* Cabeçalho Verde */}
@@ -107,18 +108,18 @@ export default function LearnScreen({ navigation }) {
         </View>
 
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
-// --- Estilos ---
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#00695C', // Verde escuro para o header (ajuste a cor)
+    backgroundColor: '#00695C', // Verde escuro para o fundo (SafeAreaView cuida do topo)
   },
   header: {
-    paddingTop: 60,
+    // 3. Ajuste de padding para SafeAreaView
+    paddingTop: 20, 
     paddingHorizontal: 20,
     paddingBottom: 20, 
   },
@@ -134,7 +135,7 @@ const styles = StyleSheet.create({
   },
   scrollContainer: {
     flex: 1, 
-    backgroundColor: '#F0F2F5', // Fundo cinza claro
+    backgroundColor: '#F0F2F5', 
     borderTopLeftRadius: 25,
     borderTopRightRadius: 25,
   },
@@ -170,9 +171,9 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
-  // Card Promoção "Recife Mais Limpa"
+  // Card Promoção
   promoCard: {
-    backgroundColor: '#E6F7F0', // Verde bem claro
+    backgroundColor: '#E6F7F0', 
     borderRadius: 15,
     padding: 20,
     alignItems: 'center',
@@ -191,7 +192,7 @@ const styles = StyleSheet.create({
   promoTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: '#004D40', // Verde escuro
+    color: '#004D40', 
     marginBottom: 10,
   },
   promoText: {
@@ -217,7 +218,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 20,
     alignItems: 'center',
-    width: '48%', // Quase metade da tela
+    width: '48%', 
     elevation: 2,
     shadowColor: '#000',
     shadowOpacity: 0.1,

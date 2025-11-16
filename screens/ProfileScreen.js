@@ -1,11 +1,10 @@
-// screens/ProfileScreen.js
 import React, { useState, useEffect } from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert } from 'react-native';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context'; // <--- IMPORT CORRETO
 import { supabase } from '../utils/supabaseClient'; 
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
 
-// Componente para os itens do menu (Histórico, Notificações, etc.)
 const MenuItem = ({ icon, title, subtitle, onPress, badgeCount }) => (
   <TouchableOpacity style={styles.menuItem} onPress={onPress}>
     <View style={[styles.menuIconContainer, { backgroundColor: '#e6f2ff' }]}>
@@ -24,20 +23,17 @@ const MenuItem = ({ icon, title, subtitle, onPress, badgeCount }) => (
   </TouchableOpacity>
 );
 
-
 export default function ProfileScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
   const [address, setAddress] = useState(null);
   const [loading, setLoading] = useState(true);
 
-  // Busca os dados do usuário e endereço quando a tela carrega
   useEffect(() => {
     const fetchUserData = async () => {
       setLoading(true);
       const { data: { user } } = await supabase.auth.getUser();
 
       if (user) {
-        // Pega os dados da nossa tabela 'usuarios'
         const { data: profileData, error: profileError } = await supabase
           .from('usuarios')
           .select('nome_razao_social, cpf_cnpj, email') 
@@ -47,7 +43,6 @@ export default function ProfileScreen({ navigation }) {
         if (profileError) console.error('Erro ao buscar perfil:', profileError.message);
         else setProfile(profileData);
 
-        // Pega o endereço padrão da tabela 'enderecos'
         const { data: addressData, error: addressError } = await supabase
           .from('enderecos')
           .select('rua') 
@@ -63,7 +58,6 @@ export default function ProfileScreen({ navigation }) {
     fetchUserData();
   }, []);
 
-  // Função de Logout
   const handleLogout = async () => {
     Alert.alert(
       "Sair da Conta",
@@ -82,20 +76,20 @@ export default function ProfileScreen({ navigation }) {
     );
   };
 
-  // Loader
   if (loading) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F2F5' }}>
-        <Text>Carregando Perfil...</Text>
+        <ActivityIndicator size="large" color="#007BFF" />
+        <Text style={{marginTop: 10}}>Carregando Perfil...</Text>
       </View>
     );
   }
 
   return (
-    <View style={styles.container}>
+    // Usando SafeAreaView aqui
+    <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
       
-      {/* Cabeçalho Azul */}
       <View style={styles.header}>
         <View style={styles.headerIcon}>
           <Ionicons name="person" size={24} color="#007BFF" />
@@ -106,15 +100,12 @@ export default function ProfileScreen({ navigation }) {
         </View>
       </View>
 
-      {/* O ScrollView agora começa ABAIXO do header */}
       <ScrollView 
         style={styles.scrollContainer}
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* View principal para empurrar o 'versionText' para baixo */}
         <View style={styles.mainContent}>
-          {/* Card de Informações de Contato */}
           <View style={styles.contactCard}>
             <Text style={styles.cardTitle}>Informações de Contato</Text>
             
@@ -124,7 +115,7 @@ export default function ProfileScreen({ navigation }) {
             </View>
             <View style={styles.infoRow}>
               <Ionicons name="call-outline" size={20} color="#666" />
-              <Text style={styles.infoText}>(81) 99999-9999</Text> {/* Placeholder */}
+              <Text style={styles.infoText}>(81) 99999-9999</Text> 
             </View>
             <View style={styles.infoRow}>
               <Ionicons name="location-outline" size={20} color="#666" />
@@ -136,7 +127,6 @@ export default function ProfileScreen({ navigation }) {
             </TouchableOpacity>
           </View>
 
-          {/* Seção Minha Conta */}
           <Text style={styles.sectionTitle}>Minha Conta</Text>
           <MenuItem
             icon={<Ionicons name="time-outline" size={20} color="#007BFF" />}
@@ -158,7 +148,6 @@ export default function ProfileScreen({ navigation }) {
             onPress={() => {}}
           />
 
-          {/* Seção Ajuda e Suporte */}
           <Text style={styles.sectionTitle}>Ajuda e Suporte</Text>
           <MenuItem
             icon={<Ionicons name="help-circle-outline" size={20} color="#007BFF" />}
@@ -173,34 +162,27 @@ export default function ProfileScreen({ navigation }) {
             onPress={() => {}}
           />
 
-          {/* Botão Sair */}
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color="#E74C3C" />
             <Text style={styles.logoutButtonText}>Sair da Conta</Text>
           </TouchableOpacity>
         </View>
 
-        {/* Versão */}
         <Text style={styles.versionText}>Conecta Coleta v1.0.0</Text>
-
       </ScrollView>
-    </View>
+    </SafeAreaView>
   );
 }
 
-// --- Estilos Corrigidos ---
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: '#F0F2F5', // Fundo cinza claro
-  },
+  container: { flex: 1, backgroundColor: '#007BFF' }, // Fundo azul para combinar com o header (SafeAreaView cuida do resto)
   header: {
-    paddingTop: 70,
     paddingHorizontal: 20,
-    paddingBottom: 30, // Reduzido
+    paddingBottom: 30,
+    paddingTop: 20, 
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: '#007BFF', // Header azul
+    backgroundColor: '#007BFF',
   },
   headerIcon: {
     width: 44,
@@ -211,27 +193,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 15,
   },
-  headerName: {
-    fontSize: 20,
-    fontWeight: 'bold',
-    color: '#fff',
-  },
-  headerIdentifier: {
-    fontSize: 14,
-    color: '#fff',
-    opacity: 0.9,
-  },
-  scrollContainer: {
-    flex: 1, 
-    // Removemos o marginTop negativo
-  },
-  scrollContent: {
-    padding: 20, 
-    flexGrow: 1, // <--- Faz o conteúdo esticar para preencher o espaço
-  },
-  mainContent: {
-    flex: 1, // <--- Esta View ocupa todo o espaço, empurrando "versionText" para baixo
-  },
+  headerName: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
+  headerIdentifier: { fontSize: 14, color: '#fff', opacity: 0.9 },
+  scrollContainer: { flex: 1, backgroundColor: '#F0F2F5' }, // Fundo cinza volta aqui
+  scrollContent: { padding: 20, flexGrow: 1 },
+  mainContent: { flex: 1 },
   contactCard: {
     backgroundColor: '#fff',
     borderRadius: 15,
@@ -242,107 +208,20 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     marginBottom: 30,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: '#333',
-    marginBottom: 20,
-  },
-  infoRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginBottom: 15,
-  },
-  infoText: {
-    fontSize: 15,
-    color: '#333',
-    marginLeft: 15,
-    flex: 1, 
-  },
-  editButton: {
-    backgroundColor: '#e6f2ff', 
-    borderRadius: 10,
-    paddingVertical: 12,
-    alignItems: 'center',
-    marginTop: 10,
-  },
-  editButtonText: {
-    color: '#007BFF',
-    fontSize: 15,
-    fontWeight: 'bold',
-  },
-  sectionTitle: {
-    fontSize: 14,
-    fontWeight: 'bold',
-    color: '#666',
-    textTransform: 'uppercase',
-    marginBottom: 10,
-    marginLeft: 10,
-  },
-  menuItem: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 15,
-    alignItems: 'center',
-    marginBottom: 10,
-    elevation: 2,
-  },
-  menuIconContainer: {
-    width: 40,
-    height: 40,
-    borderRadius: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 15,
-  },
-  menuTextContainer: {
-    flex: 1,
-  },
-  menuTitle: {
-    fontSize: 16,
-    fontWeight: 'bold',
-    color: '#333',
-  },
-  menuSubtitle: {
-    fontSize: 14,
-    color: '#666',
-  },
-  badge: {
-    backgroundColor: '#E74C3C',
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginRight: 10,
-  },
-  badgeText: {
-    color: '#fff',
-    fontSize: 12,
-    fontWeight: 'bold',
-  },
-  logoutButton: {
-    flexDirection: 'row',
-    backgroundColor: '#fff',
-    borderRadius: 15,
-    padding: 18,
-    alignItems: 'center',
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: '#E74C3C',
-  },
-  logoutButtonText: {
-    flex: 1,
-    fontSize: 16,
-    color: '#E74C3C',
-    marginLeft: 15,
-    fontWeight: 'bold',
-  },
-  versionText: {
-    textAlign: 'center',
-    color: '#999',
-    marginTop: 20, // Garante espaço
-    paddingBottom: 10, // Garante que não cole na barra de abas
-  },
+  cardTitle: { fontSize: 18, fontWeight: 'bold', color: '#333', marginBottom: 20 },
+  infoRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
+  infoText: { fontSize: 15, color: '#333', marginLeft: 15, flex: 1 },
+  editButton: { backgroundColor: '#e6f2ff', borderRadius: 10, paddingVertical: 12, alignItems: 'center', marginTop: 10 },
+  editButtonText: { color: '#007BFF', fontSize: 15, fontWeight: 'bold' },
+  sectionTitle: { fontSize: 14, fontWeight: 'bold', color: '#666', textTransform: 'uppercase', marginBottom: 10, marginLeft: 10 },
+  menuItem: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 15, padding: 15, alignItems: 'center', marginBottom: 10, elevation: 2 },
+  menuIconContainer: { width: 40, height: 40, borderRadius: 20, justifyContent: 'center', alignItems: 'center', marginRight: 15 },
+  menuTextContainer: { flex: 1 },
+  menuTitle: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+  menuSubtitle: { fontSize: 14, color: '#666' },
+  badge: { backgroundColor: '#E74C3C', borderRadius: 10, width: 20, height: 20, justifyContent: 'center', alignItems: 'center', marginRight: 10 },
+  badgeText: { color: '#fff', fontSize: 12, fontWeight: 'bold' },
+  logoutButton: { flexDirection: 'row', backgroundColor: '#fff', borderRadius: 15, padding: 18, alignItems: 'center', marginTop: 20, borderWidth: 1, borderColor: '#E74C3C' },
+  logoutButtonText: { flex: 1, fontSize: 16, color: '#E74C3C', marginLeft: 15, fontWeight: 'bold' },
+  versionText: { textAlign: 'center', color: '#999', marginTop: 20, paddingBottom: 10 },
 });

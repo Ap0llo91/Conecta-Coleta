@@ -1,8 +1,9 @@
-// screens/CompanyAuthScreen.js
 import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, Alert } from 'react-native';
+// 1. Importação correta para Safe Area
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { FontAwesome5 } from '@expo/vector-icons'; 
-import { supabase } from '../utils/supabaseClient'; // <<< 1. IMPORTE O SUPABASE
+import { supabase } from '../utils/supabaseClient';
 
 // Cores
 const primaryYellow = '#F0B90B'; 
@@ -13,24 +14,26 @@ export default function CompanyAuthScreen({ navigation, route }) {
   const isRegisterMode = (mode === 'register');
 
   return (
-    <ScrollView style={{flex: 1}} contentContainerStyle={styles.container}>
-      <View style={[styles.iconContainer, {backgroundColor: primaryYellow}]}>
-        <FontAwesome5 name="building" size={40} color="#fff" />
-      </View>
+    // 2. Trocamos a View/ScrollView principal por SafeAreaView
+    <SafeAreaView style={styles.safeArea}>
+      <ScrollView style={{flex: 1}} contentContainerStyle={styles.container}>
+        <View style={[styles.iconContainer, {backgroundColor: primaryYellow}]}>
+          <FontAwesome5 name="building" size={40} color="#fff" />
+        </View>
 
-      {isRegisterMode ? <RegisterForm /> : <LoginForm navigation={navigation} />}
-    </ScrollView>
+        {isRegisterMode ? <RegisterForm /> : <LoginForm navigation={navigation} />}
+      </ScrollView>
+    </SafeAreaView>
   );
 }
 
 // --- Componente de Formulário de Login (Empresa) ---
 const LoginForm = ({ navigation }) => {
-  const [email, setEmail] = useState(''); // Estado para email
-  const [password, setPassword] = useState(''); // Estado para senha
+  const [email, setEmail] = useState('');
+  const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
   const handleLogin = async () => {
-    // Lógica de login (próximo passo)
     Alert.alert('Login', 'Lógica de login ainda não implementada.');
   };
 
@@ -80,12 +83,10 @@ const RegisterForm = () => {
   const [endereco, setEndereco] = useState('');
   const [loading, setLoading] = useState(false);
 
-  // <<< 2. FUNÇÃO DE CADASTRO NO SUPABASE
   const handleRegister = async () => {
     if (loading) return;
     setLoading(true);
 
-    // 1. Tenta criar o usuário no Supabase Auth
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: email,
       password: password,
@@ -97,11 +98,10 @@ const RegisterForm = () => {
       return;
     }
 
-    // 2. Tenta salvar os dados extras na tabela 'Usuarios'
     const { error: dbError } = await supabase
-      .from('usuarios') // <<< 3. USA A TABELA 'usuarios'
+      .from('usuarios')
       .insert({ 
-        usuario_id: authData.user.id, // ID do Supabase Auth
+        usuario_id: authData.user.id,
         tipo_usuario: 'CNPJ', 
         cpf_cnpj: cnpj, 
         nome_razao_social: razaoSocial,
@@ -114,15 +114,14 @@ const RegisterForm = () => {
       return;
     }
     
-    // 3. Salva os dados de endereço na tabela 'Enderecos'
     const { error: addrError } = await supabase
-      .from('enderecos') // <<< 4. USA A TABELA 'enderecos'
+      .from('enderecos')
       .insert({
         usuario_id: authData.user.id,
         rua: endereco,
-        cep: '00000-000', // Placeholder
-        latitude: 0, // Placeholder
-        longitude: 0, // Placeholder
+        cep: '00000-000',
+        latitude: 0,
+        longitude: 0,
         is_padrao: true
       });
 
@@ -169,13 +168,16 @@ const RegisterForm = () => {
 
 // --- Estilos ---
 const styles = StyleSheet.create({
-  // ... (Cole os mesmos estilos que você tinha antes) ...
-  // ...
+  // Adicionado estilo para o SafeAreaView
+  safeArea: {
+    flex: 1,
+    backgroundColor: '#fffbe6', // Mantém a cor de fundo amarelada
+  },
   container: {
     flexGrow: 1,
-    backgroundColor: '#fffbe6', 
     alignItems: 'center',
     padding: 20,
+    // padding removido daqui pois o safeArea já cuida
   },
   iconContainer: {
     marginTop: 20,
