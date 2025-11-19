@@ -1,11 +1,13 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ActivityIndicator } from "react-native";
+import { View, Text, ActivityIndicator } from "react-native"; 
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-// IMPORTANTE: Envolver o app no SafeAreaProvider
-import { SafeAreaProvider } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import { SafeAreaProvider } from "react-native-safe-area-context"; 
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+} from "@expo/vector-icons";
 import { supabase } from "./utils/supabaseClient";
 
 // Telas de Autenticação
@@ -21,12 +23,16 @@ import RequestScreen from "./screens/RequestScreen";
 import LearnScreen from "./screens/LearnScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 
-// Telas de Serviço
+// Telas de Serviço e Educação
 import ReportProblemScreen from "./screens/ReportProblemScreen";
 import ScheduleServiceScreen from "./screens/ScheduleServiceScreen";
 import RequestDumpsterScreen from "./screens/RequestDumpsterScreen";
 import RequestCataTrecoScreen from "./screens/RequestCataTrecoScreen";
-import RequestUncollectedScreen from "./screens/RequestUncollectedScreen"; // <--- (1) NOVO IMPORT
+import RequestUncollectedScreen from "./screens/RequestUncollectedScreen";
+import HowItWorksScreen from "./screens/HowItWorksScreen"; 
+import RecyclingBenefitsScreen from "./screens/RecyclingBenefitsScreen"; 
+import DisposalTipsScreen from "./screens/DisposalTipsScreen"; 
+import FAQScreen from "./screens/FAQScreen"; // <--- NOVO IMPORT
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -111,7 +117,6 @@ export default function App() {
   }
 
   return (
-    // Envolvendo tudo com SafeAreaProvider para gerir os insets corretamente
     <SafeAreaProvider>
       <NavigationContainer>
         <Stack.Navigator
@@ -172,12 +177,35 @@ export default function App() {
             component={RequestCataTrecoScreen}
             options={{ headerShown: false }}
           />
-          {/* (2) NOVA ROTA LIXO NÃO COLETADO REGISTRADA AQUI */}
           <Stack.Screen
             name="RequestUncollected"
             component={RequestUncollectedScreen}
             options={{ headerShown: false }}
           />
+          
+          {/* Telas de Educação */}
+          <Stack.Screen
+            name="HowItWorks"
+            component={HowItWorksScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="RecyclingBenefits"
+            component={RecyclingBenefitsScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="DisposalTips"
+            component={DisposalTipsScreen}
+            options={{ headerShown: false }}
+          />
+          {/* NOVA ROTA AQUI */}
+          <Stack.Screen
+            name="FAQ"
+            component={FAQScreen}
+            options={{ headerShown: false }}
+          />
+
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>

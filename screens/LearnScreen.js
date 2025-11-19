@@ -1,11 +1,10 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-// 1. Importação correta para Safe Area
+import React, { useState, useEffect } from 'react';
+import { View, Text, StyleSheet, ScrollView, TouchableOpacity, ActivityIndicator } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { supabase } from '../utils/supabaseClient'; 
 
-// Componente de Link
 const LinkCard = ({ icon, iconBgColor, iconColor, title, onPress }) => (
   <TouchableOpacity style={styles.linkCard} onPress={onPress}>
     <View style={[styles.linkIconContainer, { backgroundColor: iconBgColor }]}>
@@ -18,31 +17,83 @@ const LinkCard = ({ icon, iconBgColor, iconColor, title, onPress }) => (
   </TouchableOpacity>
 );
 
-// Componente de Card de Estatística
-const StatCard = ({ icon, value, label, iconColor, iconBgColor }) => (
+const StatCard = ({ icon, value, label, iconBgColor, loading }) => (
   <View style={styles.statCard}>
     <View style={[styles.statIconContainer, { backgroundColor: iconBgColor }]}>
       {icon}
     </View>
-    <Text style={styles.statValue}>{value}</Text>
+    {loading ? (
+      <ActivityIndicator size="small" color="#333" style={{ marginVertical: 5 }} />
+    ) : (
+      <Text style={styles.statValue}>{value}</Text>
+    )}
     <Text style={styles.statLabel}>{label}</Text>
   </View>
 );
 
 export default function LearnScreen({ navigation }) {
+  const [reciclado, setReciclado] = useState('---');
+  const [participantes, setParticipantes] = useState('---');
+  const [loading, setLoading] = useState(true);
   
-  // Funções de placeholder
-  const onColetaSeletiva = () => {};
-  const onBeneficios = () => {};
-  const onDicas = () => {};
-  const onFAQ = () => {};
+  // --- NAVEGAÇÃO ---
+  const onColetaSeletiva = () => {
+    navigation.navigate('HowItWorks'); 
+  };
+
+  const onBeneficios = () => {
+    navigation.navigate('RecyclingBenefits');
+  };
+
+  const onDicas = () => {
+    navigation.navigate('DisposalTips');
+  };
+
+  const onFAQ = () => {
+    // MUDANÇA AQUI: Navega para a nova tela de FAQ
+    navigation.navigate('FAQ');
+  };
+
+  useEffect(() => {
+    const fetchStats = async () => {
+      setLoading(true);
+      try {
+        const { count, error: countError } = await supabase
+          .from('usuarios')
+          .select('*', { count: 'exact', head: true });
+
+        if (count !== null && !countError) {
+          setParticipantes(count.toLocaleString('pt-BR'));
+        } else {
+          setParticipantes('0'); 
+        }
+
+        const { data, error: statsError } = await supabase
+          .from('estatisticas_reciclagem')
+          .select('total_reciclado')
+          .limit(1)
+          .maybeSingle(); 
+
+        if (data) {
+          setReciclado(`${data.total_reciclado} ton`);
+        } else {
+          setReciclado('0 ton');
+        }
+
+      } catch (err) {
+        console.error("Erro ao carregar estatísticas:", err);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    fetchStats();
+  }, []);
 
   return (
-    // 2. Trocamos View por SafeAreaView
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
       
-      {/* Cabeçalho Verde */}
       <View style={styles.header}>
         <Text style={styles.headerTitle}>Informações e Educação</Text>
         <Text style={styles.headerSubtitle}>Aprenda sobre coleta seletiva e sustentabilidade</Text>
@@ -53,7 +104,6 @@ export default function LearnScreen({ navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Lista de Links */}
         <LinkCard 
           icon={<MaterialCommunityIcons name="recycle-variant" size={24} color="#27AE60" />}
           iconBgColor="#D4EFDF"
@@ -72,6 +122,7 @@ export default function LearnScreen({ navigation }) {
           title="Dicas de Descarte Correto"
           onPress={onDicas}
         />
+        {/* Botão atualizado para navegar */}
         <LinkCard 
           icon={<Ionicons name="help-circle-outline" size={24} color="#8E44AD" />}
           iconBgColor="#EBDEF0"
@@ -79,7 +130,6 @@ export default function LearnScreen({ navigation }) {
           onPress={onFAQ}
         />
 
-        {/* Card "Recife Mais Limpa" */}
         <View style={styles.promoCard}>
           <View style={[styles.promoIconContainer, { backgroundColor: '#27AE60' }]}>
             <MaterialCommunityIcons name="recycle-variant" size={30} color="#fff" />
@@ -90,20 +140,21 @@ export default function LearnScreen({ navigation }) {
           </Text>
         </View>
 
-        {/* Seção "Impacto da Comunidade" */}
         <Text style={styles.sectionTitle}>Impacto da Comunidade</Text>
         <View style={styles.statsContainer}>
           <StatCard
             icon={<MaterialCommunityIcons name="recycle-variant" size={24} color="#27AE60" />}
             iconBgColor="#D4EFDF"
-            value="12,5 ton"
+            value={reciclado}
             label="Recicladas"
+            loading={loading}
           />
           <StatCard
             icon={<Ionicons name="people-outline" size={24} color="#3498DB" />}
             iconBgColor="#D6EAF8"
-            value="8.547"
+            value={participantes}
             label="Participantes"
+            loading={loading}
           />
         </View>
 
@@ -115,10 +166,9 @@ export default function LearnScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: '#00695C', // Verde escuro para o fundo (SafeAreaView cuida do topo)
+    backgroundColor: '#00695C', 
   },
   header: {
-    // 3. Ajuste de padding para SafeAreaView
     paddingTop: 20, 
     paddingHorizontal: 20,
     paddingBottom: 20, 
@@ -142,7 +192,6 @@ const styles = StyleSheet.create({
   scrollContent: {
     padding: 20, 
   },
-  // Cards de Link
   linkCard: {
     flexDirection: 'row',
     backgroundColor: '#fff',
@@ -171,7 +220,6 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
     color: '#333',
   },
-  // Card Promoção
   promoCard: {
     backgroundColor: '#E6F7F0', 
     borderRadius: 15,
@@ -200,7 +248,6 @@ const styles = StyleSheet.create({
     color: '#333',
     textAlign: 'center',
   },
-  // Cards de Estatística
   sectionTitle: {
     fontSize: 20,
     fontWeight: 'bold',
