@@ -5,9 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator, // Adicionado para loading
+  ActivityIndicator, 
 } from "react-native";
-// 1. Importação da Safe Area
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
   Ionicons,
@@ -17,8 +16,10 @@ import {
 import { StatusBar } from "expo-status-bar";
 import { supabase } from "../utils/supabaseClient";
 
-// --- Componentes de Cards (Mantidos iguais) ---
-const EtaCard = () => (
+// --- Componentes de Cards ---
+
+// 1. Card do Caminhão (EtaCard) - Recebe a função onPress
+const EtaCard = ({ onPress }) => (
   <View style={styles.etaCard}>
     <View style={styles.etaHeader}>
       <MaterialCommunityIcons
@@ -40,7 +41,9 @@ const EtaCard = () => (
         </Text>
       </View>
     </View>
-    <TouchableOpacity style={styles.mapButton}>
+    
+    {/* Botão que abre o mapa */}
+    <TouchableOpacity style={styles.mapButton} onPress={onPress}>
       <Ionicons name="location-outline" size={20} color="#007BFF" />
       <Text style={styles.mapButtonText}>Ver Caminhão no Mapa</Text>
     </TouchableOpacity>
@@ -80,18 +83,20 @@ const DicaCard = () => (
   </View>
 );
 
-export default function HomeScreen() {
+export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState("Visitante");
   const [loading, setLoading] = useState(true);
+
+  // Função para abrir o mapa
+  const handleOpenMap = () => {
+    console.log("Tentando abrir o mapa..."); // Log para debug
+    navigation.navigate("MapScreen");
+  };
 
   useEffect(() => {
     const fetchUserData = async () => {
       setLoading(true);
-
-      const {
-        data: { user },
-        error: authError,
-      } = await supabase.auth.getUser();
+      const { data: { user }, error: authError } = await supabase.auth.getUser();
 
       if (authError) {
         console.error("Erro ao buscar usuário:", authError.message);
@@ -121,7 +126,6 @@ export default function HomeScreen() {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        {/* Loader animado em vez de texto simples */}
         <ActivityIndicator size="large" color="#007BFF" />
         <Text style={{ marginTop: 10, color: "#666" }}>Carregando...</Text>
       </View>
@@ -129,12 +133,11 @@ export default function HomeScreen() {
   }
 
   return (
-    // 2. Safe Area envolvendo a tela
     <SafeAreaView style={styles.container}>
       <StatusBar style="dark" />
 
       <ScrollView
-        contentContainerStyle={styles.scrollContent} // Padding movido para cá
+        contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
         {/* Cabeçalho */}
@@ -145,8 +148,8 @@ export default function HomeScreen() {
           </Text>
         </View>
 
-        {/* Card Principal de ETA */}
-        <EtaCard />
+        {/* Card Principal de ETA - Passando a função de navegação */}
+        <EtaCard onPress={handleOpenMap} />
 
         {/* Seção de Informações Rápidas */}
         <Text style={styles.sectionTitle}>Informações Rápidas</Text>
@@ -156,14 +159,14 @@ export default function HomeScreen() {
           iconBgColor="#e0f8e6"
           title="Coleta Seletiva"
           subtitle="Às quartas-feiras"
-          onPress={() => {}}
+          onPress={() => navigation.navigate("HowItWorks")} // Atalho para educação
         />
         <InfoCard
           icon={<Ionicons name="location-sharp" size={20} color="#8A2BE2" />}
           iconBgColor="#f0e6ff"
           title="Ecoponto Mais Próximo"
           subtitle="A 850m da sua casa"
-          onPress={() => {}}
+          onPress={() => navigation.navigate("MapScreen")} // Atalho para o mapa também
         />
 
         {/* Card de Dica */}
@@ -185,11 +188,11 @@ const styles = StyleSheet.create({
     backgroundColor: "#F0F2F5",
   },
   scrollContent: {
-    paddingHorizontal: 20, // Padding lateral movido para o ScrollView
+    paddingHorizontal: 20,
     paddingBottom: 30,
   },
   header: {
-    marginTop: 10, // Espaço pequeno, SafeArea já cuida do topo
+    marginTop: 10,
     marginBottom: 20,
   },
   headerTitle: {

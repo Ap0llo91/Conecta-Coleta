@@ -1,38 +1,40 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ActivityIndicator } from "react-native"; 
+import { View, Text, ActivityIndicator } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { SafeAreaProvider } from "react-native-safe-area-context"; 
-import {
-  Ionicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "./utils/supabaseClient";
 
-// Telas de Autenticação
+// --- 1. Telas de Autenticação ---
 import WelcomeScreen from "./screens/WelcomeScreen";
 import CitizenAuthScreen from "./screens/CitizenAuthScreen";
 import CompanyAuthScreen from "./screens/CompanyAuthScreen";
 import RegisterChoiceScreen from "./screens/RegisterChoiceScreen";
 import ForgotPasswordScreen from "./screens/ForgotPasswordScreen";
 
-// Telas Principais (as 4 Abas)
+// --- 2. Telas Principais (Abas) ---
 import HomeScreen from "./screens/HomeScreen";
 import RequestScreen from "./screens/RequestScreen";
 import LearnScreen from "./screens/LearnScreen";
 import ProfileScreen from "./screens/ProfileScreen";
 
-// Telas de Serviço e Educação
+// --- 3. Telas de Serviço ---
 import ReportProblemScreen from "./screens/ReportProblemScreen";
 import ScheduleServiceScreen from "./screens/ScheduleServiceScreen";
 import RequestDumpsterScreen from "./screens/RequestDumpsterScreen";
 import RequestCataTrecoScreen from "./screens/RequestCataTrecoScreen";
 import RequestUncollectedScreen from "./screens/RequestUncollectedScreen";
-import HowItWorksScreen from "./screens/HowItWorksScreen"; 
-import RecyclingBenefitsScreen from "./screens/RecyclingBenefitsScreen"; 
-import DisposalTipsScreen from "./screens/DisposalTipsScreen"; 
-import FAQScreen from "./screens/FAQScreen"; // <--- NOVO IMPORT
+
+// --- 4. Telas de Educação ---
+import HowItWorksScreen from "./screens/HowItWorksScreen";
+import RecyclingBenefitsScreen from "./screens/RecyclingBenefitsScreen";
+import DisposalTipsScreen from "./screens/DisposalTipsScreen";
+import FAQScreen from "./screens/FAQScreen";
+
+// --- 5. Tela de Mapa ---
+import MapScreen from "./screens/MapScreen"; // <--- ESTAVA FALTANDO ESTE IMPORT
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -122,7 +124,7 @@ export default function App() {
         <Stack.Navigator
           initialRouteName={session && session.user ? "AppTabs" : "Welcome"}
         >
-          {/* Grupo de telas Pós-Login */}
+          {/* Grupo de telas Pós-Login (Abas) */}
           <Stack.Screen
             name="AppTabs"
             component={AppTabs}
@@ -182,7 +184,7 @@ export default function App() {
             component={RequestUncollectedScreen}
             options={{ headerShown: false }}
           />
-          
+
           {/* Telas de Educação */}
           <Stack.Screen
             name="HowItWorks"
@@ -199,13 +201,18 @@ export default function App() {
             component={DisposalTipsScreen}
             options={{ headerShown: false }}
           />
-          {/* NOVA ROTA AQUI */}
           <Stack.Screen
             name="FAQ"
             component={FAQScreen}
             options={{ headerShown: false }}
           />
 
+          {/* TELA DO MAPA (Esta estava faltando) */}
+          <Stack.Screen
+            name="MapScreen"
+            component={MapScreen}
+            options={{ headerShown: false }}
+          />
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
