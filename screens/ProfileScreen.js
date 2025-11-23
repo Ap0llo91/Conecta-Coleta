@@ -1,9 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import { View, Text, StyleSheet, ScrollView, TouchableOpacity, Alert, ActivityIndicator } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context'; // <--- IMPORT CORRETO
+import { SafeAreaView } from 'react-native-safe-area-context';
 import { supabase } from '../utils/supabaseClient'; 
 import { Ionicons } from '@expo/vector-icons';
 import { StatusBar } from 'expo-status-bar';
+import { useFocusEffect } from '@react-navigation/native';
 
 const MenuItem = ({ icon, title, subtitle, onPress, badgeCount }) => (
   <TouchableOpacity style={styles.menuItem} onPress={onPress}>
@@ -26,37 +27,47 @@ const MenuItem = ({ icon, title, subtitle, onPress, badgeCount }) => (
 export default function ProfileScreen({ navigation }) {
   const [profile, setProfile] = useState(null);
   const [address, setAddress] = useState(null);
+  const [notificationCount, setNotificationCount] = useState(0);
   const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
-    const fetchUserData = async () => {
-      setLoading(true);
-      const { data: { user } } = await supabase.auth.getUser();
+  // Função que carrega todos os dados
+  const fetchData = async () => {
+    const { data: { user } } = await supabase.auth.getUser();
+    if (user) {
+      // Perfil
+      const { data: profileData } = await supabase
+        .from('usuarios')
+        .select('nome_razao_social, cpf_cnpj, email') 
+        .eq('usuario_id', user.id)
+        .single(); 
+      if (profileData) setProfile(profileData);
 
-      if (user) {
-        const { data: profileData, error: profileError } = await supabase
-          .from('usuarios')
-          .select('nome_razao_social, cpf_cnpj, email') 
-          .eq('usuario_id', user.id)
-          .single(); 
+      // Endereço
+      const { data: addressData } = await supabase
+        .from('enderecos')
+        .select('rua') 
+        .eq('usuario_id', user.id)
+        .eq('is_padrao', true) 
+        .single(); 
+      if (addressData) setAddress(addressData);
 
-        if (profileError) console.error('Erro ao buscar perfil:', profileError.message);
-        else setProfile(profileData);
+      // Notificações não lidas
+      const { count } = await supabase
+        .from('notificacoes')
+        .select('*', { count: 'exact', head: true })
+        .eq('usuario_id', user.id)
+        .eq('lida', false);
+      setNotificationCount(count || 0);
+    }
+    setLoading(false);
+  };
 
-        const { data: addressData, error: addressError } = await supabase
-          .from('enderecos')
-          .select('rua') 
-          .eq('usuario_id', user.id)
-          .eq('is_padrao', true) 
-          .single(); 
-
-        if (addressError) console.error('Erro ao buscar endereço:', addressError.message);
-        else setAddress(addressData);
-      }
-      setLoading(false);
-    };
-    fetchUserData();
-  }, []);
+  // Recarrega sempre que a tela ganha foco
+  useFocusEffect(
+    useCallback(() => {
+      fetchData();
+    }, [])
+  );
 
   const handleLogout = async () => {
     Alert.alert(
@@ -68,25 +79,26 @@ export default function ProfileScreen({ navigation }) {
           text: "Sim, Sair", 
           style: "destructive",
           onPress: async () => {
-            const { error } = await supabase.auth.signOut();
-            if (error) Alert.alert('Erro ao sair', error.message);
+            await supabase.auth.signOut();
+            navigation.reset({
+              index: 0,
+              routes: [{ name: 'Welcome' }],
+            });
           }
         }
       ]
     );
   };
 
-  if (loading) {
+  if (loading && !profile) {
     return (
       <View style={{ flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: '#F0F2F5' }}>
         <ActivityIndicator size="large" color="#007BFF" />
-        <Text style={{marginTop: 10}}>Carregando Perfil...</Text>
       </View>
     );
   }
 
   return (
-    // Usando SafeAreaView aqui
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
       
@@ -95,20 +107,16 @@ export default function ProfileScreen({ navigation }) {
           <Ionicons name="person" size={24} color="#007BFF" />
         </View>
         <View>
-          <Text style={styles.headerName}>{profile?.nome_razao_social || 'Nome não encontrado'}</Text>
+          <Text style={styles.headerName}>{profile?.nome_razao_social || 'Usuário'}</Text>
           <Text style={styles.headerIdentifier}>{profile?.cpf_cnpj || '---'}</Text>
         </View>
       </View>
 
-      <ScrollView 
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
+      <ScrollView style={styles.scrollContainer} contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
         <View style={styles.mainContent}>
+          {/* Card de Contato */}
           <View style={styles.contactCard}>
             <Text style={styles.cardTitle}>Informações de Contato</Text>
-            
             <View style={styles.infoRow}>
               <Ionicons name="mail-outline" size={20} color="#666" />
               <Text style={styles.infoText}>{profile?.email}</Text>
@@ -121,31 +129,38 @@ export default function ProfileScreen({ navigation }) {
               <Ionicons name="location-outline" size={20} color="#666" />
               <Text style={styles.infoText}>{address?.rua || 'Endereço não cadastrado'}</Text>
             </View>
-
-            <TouchableOpacity style={styles.editButton}>
+            
+            {/* BOTÃO EDITAR - LIGADO À TELA DE EDIÇÃO */}
+            <TouchableOpacity 
+              style={styles.editButton}
+              onPress={() => navigation.navigate('EditProfile')}
+            >
               <Text style={styles.editButtonText}>Editar Informações</Text>
             </TouchableOpacity>
           </View>
 
           <Text style={styles.sectionTitle}>Minha Conta</Text>
+          
           <MenuItem
             icon={<Ionicons name="time-outline" size={20} color="#007BFF" />}
             title="Histórico"
             subtitle="Seus pedidos e solicitações"
-            onPress={() => {}}
+            onPress={() => navigation.navigate('History')} 
           />
+          
           <MenuItem
             icon={<Ionicons name="notifications-outline" size={20} color="#007BFF" />}
             title="Notificações"
-            subtitle="3 notificações não lidas"
-            onPress={() => {}}
-            badgeCount={3}
+            subtitle={notificationCount > 0 ? `${notificationCount} não lidas` : 'Nenhuma nova notificação'}
+            onPress={() => navigation.navigate('Notifications')}
+            badgeCount={notificationCount}
           />
+          
           <MenuItem
             icon={<Ionicons name="settings-outline" size={20} color="#007BFF" />}
             title="Configurações"
             subtitle="Preferências do aplicativo"
-            onPress={() => {}}
+            onPress={() => navigation.navigate('Settings')} 
           />
 
           <Text style={styles.sectionTitle}>Ajuda e Suporte</Text>
@@ -153,29 +168,23 @@ export default function ProfileScreen({ navigation }) {
             icon={<Ionicons name="help-circle-outline" size={20} color="#007BFF" />}
             title="Central de Ajuda"
             subtitle="Perguntas frequentes"
-            onPress={() => {}}
+            onPress={() => navigation.navigate('FAQ')}
           />
-          <MenuItem
-            icon={<Ionicons name="document-text-outline" size={20} color="#007BFF" />}
-            title="Termos e Privacidade"
-            subtitle="Políticas do aplicativo"
-            onPress={() => {}}
-          />
-
+          
           <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
             <Ionicons name="log-out-outline" size={24} color="#E74C3C" />
             <Text style={styles.logoutButtonText}>Sair da Conta</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.versionText}>Conecta Coleta v1.0.0</Text>
+        <Text style={styles.versionText}>Conecta Coleta v1.1.0</Text>
       </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#007BFF' }, // Fundo azul para combinar com o header (SafeAreaView cuida do resto)
+  container: { flex: 1, backgroundColor: '#007BFF' }, 
   header: {
     paddingHorizontal: 20,
     paddingBottom: 30,
@@ -195,7 +204,7 @@ const styles = StyleSheet.create({
   },
   headerName: { fontSize: 20, fontWeight: 'bold', color: '#fff' },
   headerIdentifier: { fontSize: 14, color: '#fff', opacity: 0.9 },
-  scrollContainer: { flex: 1, backgroundColor: '#F0F2F5' }, // Fundo cinza volta aqui
+  scrollContainer: { flex: 1, backgroundColor: '#F0F2F5' }, 
   scrollContent: { padding: 20, flexGrow: 1 },
   mainContent: { flex: 1 },
   contactCard: {

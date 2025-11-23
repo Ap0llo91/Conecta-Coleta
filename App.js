@@ -33,8 +33,13 @@ import RecyclingBenefitsScreen from "./screens/RecyclingBenefitsScreen";
 import DisposalTipsScreen from "./screens/DisposalTipsScreen";
 import FAQScreen from "./screens/FAQScreen";
 
-// --- 5. Tela de Mapa ---
-import MapScreen from "./screens/MapScreen"; // <--- ESTAVA FALTANDO ESTE IMPORT
+// --- 5. Telas Extras (Mapa, Histórico, Detalhes, Configurações, Edição) ---
+import MapScreen from "./screens/MapScreen";
+import HistoryScreen from "./screens/HistoryScreen";
+import RequestDetailsScreen from "./screens/RequestDetailsScreen";
+import NotificationsScreen from "./screens/NotificationsScreen";
+import SettingsScreen from "./screens/SettingsScreen";
+import EditProfileScreen from "./screens/EditProfileScreen"; // <--- IMPORT DA TELA DE EDIÇÃO
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -207,10 +212,39 @@ export default function App() {
             options={{ headerShown: false }}
           />
 
-          {/* TELA DO MAPA (Esta estava faltando) */}
+          {/* Telas Extras */}
           <Stack.Screen
             name="MapScreen"
             component={MapScreen}
+            options={{ headerShown: false }}
+          />
+
+          {/* Histórico, Notificações e Detalhes */}
+          <Stack.Screen
+            name="History"
+            component={HistoryScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="RequestDetails"
+            component={RequestDetailsScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="Notifications"
+            component={NotificationsScreen}
+            options={{ headerShown: false }}
+          />
+
+          {/* Configurações e Edição */}
+          <Stack.Screen
+            name="Settings"
+            component={SettingsScreen}
+            options={{ headerShown: false }}
+          />
+          <Stack.Screen
+            name="EditProfile"
+            component={EditProfileScreen}
             options={{ headerShown: false }}
           />
         </Stack.Navigator>
