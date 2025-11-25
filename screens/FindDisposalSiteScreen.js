@@ -50,8 +50,6 @@ const FindDisposalSiteScreen = ({ navigation }) => {
           <Ionicons name="chevron-forward" size={24} color="#CCC" />
         </TouchableOpacity>
 
-        {/* REMOVIDA A BARRA DE PESQUISA AQUI */}
-
         {/* 2. Grid de Tipos de Resíduos */}
         <Text style={styles.sectionTitle}>Tipos de Resíduos</Text>
         <View style={styles.gridContainer}>
@@ -106,7 +104,14 @@ const FindDisposalSiteScreen = ({ navigation }) => {
         >
           <Text style={styles.benefitsTitle}>Benefícios da Reciclagem</Text>
           <BenefitItem text="Reduz a poluição ambiental" icon="leaf" />
-          <BenefitItem text="Economiza recursos naturais" icon="tree" />
+
+          {/* CORREÇÃO AQUI: Agora passamos iconLib={MaterialCommunityIcons} para a árvore funcionar */}
+          <BenefitItem
+            text="Economiza recursos naturais"
+            icon="tree"
+            iconLib={MaterialCommunityIcons}
+          />
+
           <BenefitItem text="Gera economia de energia" icon="flash" />
           <BenefitItem text="Cria empregos e renda" icon="briefcase" />
         </TouchableOpacity>
@@ -118,6 +123,7 @@ const FindDisposalSiteScreen = ({ navigation }) => {
 };
 
 // Componentes Auxiliares
+
 const GridItem = ({ label, icon, iconLib: IconLib, color, onPress }) => (
   <TouchableOpacity style={styles.gridItem} onPress={onPress}>
     <IconLib name={icon} size={32} color={color} style={{ marginBottom: 10 }} />
@@ -125,14 +131,10 @@ const GridItem = ({ label, icon, iconLib: IconLib, color, onPress }) => (
   </TouchableOpacity>
 );
 
-const BenefitItem = ({ text, icon }) => (
+// CORREÇÃO NO COMPONENTE: Adicionei "iconLib" com valor padrão "Ionicons"
+const BenefitItem = ({ text, icon, iconLib: IconLib = Ionicons }) => (
   <View style={styles.benefitRow}>
-    <Ionicons
-      name={icon}
-      size={16}
-      color="#2E7D32"
-      style={{ marginRight: 8 }}
-    />
+    <IconLib name={icon} size={16} color="#2E7D32" style={{ marginRight: 8 }} />
     <Text style={styles.benefitText}>{text}</Text>
   </View>
 );

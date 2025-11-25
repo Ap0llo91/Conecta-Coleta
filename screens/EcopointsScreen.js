@@ -6,12 +6,13 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
+  Linking, // Importado para abrir apps externos
+  Platform, // Importado para detectar se é Android ou iOS
 } from "react-native";
 import MapView, { Marker, PROVIDER_GOOGLE } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
-import * as Location from "expo-location"; // Biblioteca de GPS
+import * as Location from "expo-location";
 
 // --- DADOS REAIS DE ECOPONTOS (RECIFE) ---
 const RAW_POINTS = [
@@ -68,12 +69,32 @@ export default function EcopointsScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // Pega o filtro da tela anterior (se houver)
   const filter = route.params?.filter;
 
-  // --- FÓRMULA MATEMÁTICA DE DISTÂNCIA (HAVERSINE) ---
+  // --- FUNÇÃO PARA ABRIR O MAPA ---
+  const openGps = (lat, lng, label) => {
+    const scheme = Platform.select({
+      ios: "maps:0,0?q=",
+      android: "geo:0,0?q=",
+    });
+    const latLng = `${lat},${lng}`;
+    const labelEncoded = encodeURIComponent(label);
+
+    const url = Platform.select({
+      ios: `maps:0,0?q=${labelEncoded}@${latLng}`,
+      android: `google.navigation:q=${latLng}`, // Força abrir navegação no Android
+    });
+
+    Linking.openURL(url).catch(() => {
+      // Fallback caso não consiga abrir o esquema nativo
+      Linking.openURL(
+        `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
+      );
+    });
+  };
+
   const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Raio da terra em km
+    const R = 6371;
     const dLat = deg2rad(lat2 - lat1);
     const dLon = deg2rad(lon2 - lon1);
     const a =
@@ -92,20 +113,15 @@ export default function EcopointsScreen({ navigation, route }) {
     (async () => {
       setLoading(true);
 
-      // 1. Pedir Permissão e Pegar Localização Real
       let { status } = await Location.requestForegroundPermissionsAsync();
       if (status !== "granted") {
-        setErrorMsg(
-          "Permissão de localização negada. Mostrando distâncias da Praça do Marco Zero."
-        );
-        // Fallback: Marco Zero
+        setErrorMsg("Permissão negada. Mostrando distâncias do Marco Zero.");
         setUserLocation({ latitude: -8.0631, longitude: -34.8711 });
       } else {
         let location = await Location.getCurrentPositionAsync({});
         setUserLocation(location.coords);
       }
 
-      // 2. Preparar a lista inicial (com ou sem filtro de tags)
       let filteredList = RAW_POINTS;
       if (filter) {
         filteredList = RAW_POINTS.filter((p) =>
@@ -117,11 +133,10 @@ export default function EcopointsScreen({ navigation, route }) {
         );
       }
 
-      // 3. Calcular Distâncias e Ordenar
       const currentUserLoc = userLocation || {
         latitude: -8.0631,
         longitude: -34.8711,
-      }; // Usa a localização obtida ou fallback
+      };
 
       const sortedList = filteredList
         .map((point) => {
@@ -133,12 +148,12 @@ export default function EcopointsScreen({ navigation, route }) {
           );
           return { ...point, distance: dist };
         })
-        .sort((a, b) => a.distance - b.distance); // ORDENAÇÃO: Menor distância primeiro
+        .sort((a, b) => a.distance - b.distance);
 
       setPoints(sortedList);
       setLoading(false);
     })();
-  }, [filter, userLocation?.latitude]); // Recalcula se o filtro ou a localização mudar
+  }, [filter, userLocation?.latitude]);
 
   return (
     <SafeAreaView style={styles.container}>
@@ -181,14 +196,20 @@ export default function EcopointsScreen({ navigation, route }) {
                 latitudeDelta: 0.15,
                 longitudeDelta: 0.15,
               }}
-              showsUserLocation={true} // Mostra a bolinha azul pulsante nativa do mapa
+              showsUserLocation={true}
             >
-              {/* Marcadores dos Ecopontos */}
               {points.map((point) => (
                 <Marker
                   key={point.id}
                   coordinate={point.coords}
                   title={point.title}
+                  onCalloutPress={() =>
+                    openGps(
+                      point.coords.latitude,
+                      point.coords.longitude,
+                      point.title
+                    )
+                  }
                 >
                   <View style={styles.ecoMarker}>
                     <MaterialCommunityIcons
@@ -200,7 +221,6 @@ export default function EcopointsScreen({ navigation, route }) {
                 </Marker>
               ))}
             </MapView>
-
             <View style={styles.mapOverlay} pointerEvents="none" />
           </View>
 
@@ -210,25 +230,42 @@ export default function EcopointsScreen({ navigation, route }) {
 
             {points.map((item, index) => (
               <View key={item.id} style={styles.card}>
-                {/* Tag de "Mais Próximo" para o primeiro da lista */}
+                {/* Tag de "Mais Próximo" */}
                 {index === 0 && (
                   <View style={styles.nearestBadge}>
                     <Text style={styles.nearestText}>MAIS PRÓXIMO</Text>
                   </View>
                 )}
 
-                <View style={styles.cardHeader}>
-                  <View style={styles.iconBg}>
-                    <Ionicons
-                      name="location-outline"
-                      size={24}
-                      color="#00A859"
-                    />
+                <View style={styles.cardHeaderRow}>
+                  {/* Lado Esquerdo: Ícone + Textos */}
+                  <View style={styles.cardLeftInfo}>
+                    <View style={styles.iconBg}>
+                      <Ionicons
+                        name="location-outline"
+                        size={24}
+                        color="#00A859"
+                      />
+                    </View>
+                    <View style={{ flex: 1, marginRight: 5 }}>
+                      <Text style={styles.cardTitle}>{item.title}</Text>
+                      <Text style={styles.cardAddress}>{item.address}</Text>
+                    </View>
                   </View>
-                  <View style={{ flex: 1 }}>
-                    <Text style={styles.cardTitle}>{item.title}</Text>
-                    <Text style={styles.cardAddress}>{item.address}</Text>
-                  </View>
+
+                  {/* Lado Direito: BOTÃO DE NAVEGAR */}
+                  <TouchableOpacity
+                    style={styles.navButton}
+                    onPress={() =>
+                      openGps(
+                        item.coords.latitude,
+                        item.coords.longitude,
+                        item.title
+                      )
+                    }
+                  >
+                    <Ionicons name="navigate" size={20} color="white" />
+                  </TouchableOpacity>
                 </View>
 
                 {/* Distância Calculada */}
@@ -240,11 +277,9 @@ export default function EcopointsScreen({ navigation, route }) {
                     style={{ marginRight: 4 }}
                   />
                   <Text style={styles.distText}>
-                    {
-                      item.distance < 1
-                        ? `${(item.distance * 1000).toFixed(0)} m` // Mostra em metros se for perto
-                        : `${item.distance.toFixed(1)} km` // Mostra em km se for longe
-                    }
+                    {item.distance < 1
+                      ? `${(item.distance * 1000).toFixed(0)} m`
+                      : `${item.distance.toFixed(1)} km`}
                   </Text>
                 </View>
 
@@ -372,13 +407,22 @@ const styles = StyleSheet.create({
     borderBottomLeftRadius: 12,
     paddingHorizontal: 10,
     paddingVertical: 4,
+    zIndex: 10, // Garante que fique acima
   },
   nearestText: { color: "white", fontSize: 10, fontWeight: "bold" },
 
-  cardHeader: {
+  // --- ALTERAÇÕES DO HEADER DO CARD ---
+  cardHeaderRow: {
     flexDirection: "row",
-    alignItems: "flex-start",
+    alignItems: "flex-start", // MUDANÇA 1: Mudado de 'center' para 'flex-start' para permitir o deslocamento
+    justifyContent: "space-between",
     marginBottom: 10,
+    marginTop: 5,
+  },
+  cardLeftInfo: {
+    flexDirection: "row",
+    flex: 1,
+    alignItems: "center",
   },
   iconBg: {
     width: 40,
@@ -391,6 +435,23 @@ const styles = StyleSheet.create({
   },
   cardTitle: { fontSize: 16, fontWeight: "bold", color: "#333" },
   cardAddress: { fontSize: 13, color: "#666", marginTop: 2 },
+
+  // --- ESTILO DO BOTÃO DE NAVEGAR ---
+  navButton: {
+    backgroundColor: "#007BFF",
+    width: 40,
+    height: 40,
+    borderRadius: 20,
+    justifyContent: "center",
+    alignItems: "center",
+    marginLeft: 8,
+    marginTop: 25, // MUDANÇA 2: MarginTop generoso para afastar da etiqueta
+    elevation: 2,
+    shadowColor: "#000",
+    shadowOpacity: 0.1,
+    shadowRadius: 2,
+    shadowOffset: { width: 0, height: 2 },
+  },
 
   infoRow: {
     flexDirection: "row",

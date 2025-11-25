@@ -16,9 +16,9 @@ import {
 } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { supabase } from "../utils/supabaseClient";
-import * as Location from "expo-location"; // Importando Location
+import * as Location from "expo-location";
 
-// --- DADOS DOS ECOPONTOS (Mesmos do Mapa) ---
+// --- DADOS DOS ECOPONTOS ---
 const ECOPONTOS = [
   { title: "Ecoponto Boa Viagem", latitude: -8.1275, longitude: -34.902 },
   { title: "Ecoponto Torre", latitude: -8.052, longitude: -34.91 },
@@ -28,7 +28,7 @@ const ECOPONTOS = [
 
 // --- Componentes de Cards ---
 
-const EtaCard = ({ onPress }) => (
+const EtaCard = ({ minutes, onPress }) => (
   <View style={styles.etaCard}>
     <View style={styles.etaHeader}>
       <MaterialCommunityIcons
@@ -38,15 +38,30 @@ const EtaCard = ({ onPress }) => (
       />
       <Text style={styles.etaHeaderText}>Coleta Comum</Text>
     </View>
+    
     <Text style={styles.etaTitle}>Previsão de Chegada</Text>
-    <Text style={styles.etaTime}>8</Text>
-    <Text style={styles.etaMinutes}>MINUTOS</Text>
+    
+    {/* Se for menos de 1 minuto, mostra CHEGANDO */}
+    {minutes <= 1 ? (
+        <View style={{ alignItems: 'center', marginVertical: 10 }}>
+            <Text style={styles.etaTimeSmall}>CHEGANDO</Text>
+            <Text style={styles.etaMinutes}>AGORA</Text>
+        </View>
+    ) : (
+        <>
+            <Text style={styles.etaTime}>{minutes}</Text>
+            <Text style={styles.etaMinutes}>MINUTOS</Text>
+        </>
+    )}
+
     <View style={styles.etaStatus}>
       <Ionicons name="time-outline" size={20} color="#fff" />
-      <View style={{ marginLeft: 10 }}>
-        <Text style={styles.etaStatusTitle}>O caminhão está chegando!</Text>
+      <View style={{ marginLeft: 10, flex: 1 }}>
+        <Text style={styles.etaStatusTitle}>
+            {minutes <= 5 ? "O caminhão está muito perto!" : "O caminhão está a caminho"}
+        </Text>
         <Text style={styles.etaStatusSubtitle}>
-          Deixe seu lixo na calçada agora
+          {minutes <= 5 ? "Deixe seu lixo na calçada agora." : "Prepare seu lixo para coleta."}
         </Text>
       </View>
     </View>
@@ -108,10 +123,11 @@ export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState("Visitante");
   const [loading, setLoading] = useState(true);
 
-  // Estados para o Ecoponto Próximo
+  // Estados para localização e ETA
   const [nearestEcopoint, setNearestEcopoint] = useState(null);
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [userAddress, setUserAddress] = useState("Carregando localização...");
+  const [etaMinutes, setEtaMinutes] = useState(12); // Começa com um valor padrão, depois atualiza
 
   const handleOpenMap = () => {
     navigation.navigate("MapScreen");
@@ -119,7 +135,7 @@ export default function HomeScreen({ navigation }) {
 
   // Função Matemática de Distância (Haversine)
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
-    const R = 6371; // Raio da Terra em km
+    const R = 6371; 
     const dLat = (lat2 - lat1) * (Math.PI / 180);
     const dLon = (lon2 - lon1) * (Math.PI / 180);
     const a =
@@ -130,6 +146,24 @@ export default function HomeScreen({ navigation }) {
         Math.sin(dLon / 2);
     const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
     return R * c;
+  };
+
+  // Calcula ETA baseado em uma posição fictícia do caminhão (para simulação dinâmica)
+  const calculateEta = (userLat, userLon) => {
+      // Simulamos que o caminhão está a uns 3km de distância (ex: perto da Jaqueira se vc estiver na Torre)
+      // Para fins de demo, criamos um offset fixo da posição do usuário
+      const truckLat = userLat + 0.02; 
+      const truckLon = userLon + 0.02;
+      
+      const distKm = calculateDistance(userLat, userLon, truckLat, truckLon);
+      
+      // Velocidade média de coleta: 15 km/h (devagar por causa das paradas)
+      const speedKmH = 15; 
+      const timeHours = distKm / speedKmH;
+      const timeMinutes = Math.round(timeHours * 60);
+      
+      // Garante que nunca seja 0 ou negativo se estiver muito perto na simulação
+      return timeMinutes < 2 ? 2 : timeMinutes; 
   };
 
   useEffect(() => {
@@ -148,18 +182,22 @@ export default function HomeScreen({ navigation }) {
       }
       setLoading(false);
 
-      // 2. Buscar Localização e Calcular Ecoponto
+      // 2. Buscar Localização
       try {
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
-          setUserAddress("Permissão de localização negada");
+          setUserAddress("Localização não permitida");
           setLoadingLocation(false);
           return;
         }
 
         let location = await Location.getCurrentPositionAsync({});
+        
+        // ATUALIZA O ETA DINAMICAMENTE
+        const realEta = calculateEta(location.coords.latitude, location.coords.longitude);
+        setEtaMinutes(realEta);
 
-        // Pega o endereço legível (Rua)
+        // Pega o endereço legível
         let geocode = await Location.reverseGeocodeAsync(location.coords);
         if (geocode.length > 0) {
           setUserAddress(
@@ -169,7 +207,7 @@ export default function HomeScreen({ navigation }) {
           );
         }
 
-        // Calcula o mais próximo
+        // Calcula o ecoponto mais próximo
         let minDistance = Infinity;
         let closest = null;
 
@@ -226,8 +264,8 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Card Principal de ETA */}
-        <EtaCard onPress={handleOpenMap} />
+        {/* Card Principal de ETA (Passamos os minutos calculados) */}
+        <EtaCard minutes={etaMinutes} onPress={handleOpenMap} />
 
         {/* Seção de Informações Rápidas */}
         <Text style={styles.sectionTitle}>Informações Rápidas</Text>
@@ -253,7 +291,7 @@ export default function HomeScreen({ navigation }) {
               : "Localizando..."
           }
           isLoading={loadingLocation}
-          onPress={() => navigation.navigate("Ecopoints")} // Vai para a lista detalhada
+          onPress={() => navigation.navigate("Ecopoints")}
         />
 
         {/* Card de Dica */}
@@ -283,18 +321,16 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   headerTitle: {
-    fontSize: 26,
+    fontSize: 24, // Levemente menor para não quebrar em nomes longos
     fontWeight: "bold",
     color: "#333",
   },
   locationText: {
     fontSize: 14,
     color: "#666",
+    flex: 1, // Garante que o texto quebre se for longo
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: "#666",
-  },
+  
   // Card Azul
   etaCard: {
     backgroundColor: "#007BFF",
@@ -330,12 +366,19 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     lineHeight: 120,
   },
+  etaTimeSmall: { // Estilo para quando estiver "CHEGANDO"
+    color: "#fff",
+    fontSize: 48,
+    fontWeight: "bold",
+    marginTop: 10,
+  },
   etaMinutes: {
     color: "#fff",
     fontSize: 18,
     fontWeight: "bold",
     letterSpacing: 1,
     marginTop: -15,
+    marginBottom: 5,
   },
   etaStatus: {
     flexDirection: "row",

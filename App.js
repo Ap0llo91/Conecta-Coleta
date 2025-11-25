@@ -1,13 +1,10 @@
 import React, { useState, useEffect } from "react";
-import { View, Text, ActivityIndicator } from "react-native"; 
+import { View, Text, ActivityIndicator } from "react-native";
 import { NavigationContainer } from "@react-navigation/native";
 import { createNativeStackNavigator } from "@react-navigation/native-stack";
 import { createBottomTabNavigator } from "@react-navigation/bottom-tabs";
-import { SafeAreaProvider } from "react-native-safe-area-context"; 
-import {
-  Ionicons,
-  MaterialCommunityIcons,
-} from "@expo/vector-icons";
+import { SafeAreaProvider } from "react-native-safe-area-context";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "./utils/supabaseClient";
 
 // --- 1. Telas de Autenticação ---
@@ -44,7 +41,7 @@ import NotificationsScreen from "./screens/NotificationsScreen";
 import SettingsScreen from "./screens/SettingsScreen";
 import EditProfileScreen from "./screens/EditProfileScreen";
 import EcopointsScreen from "./screens/EcopointsScreen";
-import FindDisposalSiteScreen from "./screens/FindDisposalSiteScreen"; // <--- IMPORT CONFIRMADO
+import FindDisposalSiteScreen from "./screens/FindDisposalSiteScreen";
 
 const Stack = createNativeStackNavigator();
 const Tab = createBottomTabNavigator();
@@ -66,15 +63,16 @@ function AppTabs() {
           } else if (route.name === "Fazer Pedido") {
             return (
               <MaterialCommunityIcons
-                name={focused ? "calendar-plus" : "calendar-plus-outline"}
+                name={focused ? "calendar-plus" : "calendar-plus"}
                 size={size}
                 color={color}
               />
             );
           } else if (route.name === "Aprender") {
+            // CORREÇÃO AQUI: Mudamos para MaterialCommunityIcons para usar a Árvore
             return (
-              <Ionicons
-                name={focused ? "book" : "book-outline"}
+              <MaterialCommunityIcons
+                name={focused ? "tree" : "tree-outline"}
                 size={size}
                 color={color}
               />
@@ -194,7 +192,7 @@ export default function App() {
             component={RequestUncollectedScreen}
             options={{ headerShown: false }}
           />
-          
+
           {/* Telas de Educação */}
           <Stack.Screen
             name="HowItWorks"
@@ -223,46 +221,45 @@ export default function App() {
             component={MapScreen}
             options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="Ecopoints" 
-            component={EcopointsScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="Ecopoints"
+            component={EcopointsScreen}
+            options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="FindDisposalSite" 
-            component={FindDisposalSiteScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="FindDisposalSite"
+            component={FindDisposalSiteScreen}
+            options={{ headerShown: false }}
           />
-          
+
           {/* Histórico, Notificações e Detalhes */}
           <Stack.Screen
             name="History"
             component={HistoryScreen}
             options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="RequestDetails" 
-            component={RequestDetailsScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="RequestDetails"
+            component={RequestDetailsScreen}
+            options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="Notifications" 
-            component={NotificationsScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="Notifications"
+            component={NotificationsScreen}
+            options={{ headerShown: false }}
           />
 
           {/* Configurações e Edição */}
-          <Stack.Screen 
-            name="Settings" 
-            component={SettingsScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="Settings"
+            component={SettingsScreen}
+            options={{ headerShown: false }}
           />
-          <Stack.Screen 
-            name="EditProfile" 
-            component={EditProfileScreen} 
-            options={{ headerShown: false }} 
+          <Stack.Screen
+            name="EditProfile"
+            component={EditProfileScreen}
+            options={{ headerShown: false }}
           />
-
         </Stack.Navigator>
       </NavigationContainer>
     </SafeAreaProvider>
