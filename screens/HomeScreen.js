@@ -5,7 +5,8 @@ import {
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  ActivityIndicator, 
+  ActivityIndicator,
+  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -15,10 +16,18 @@ import {
 } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 import { supabase } from "../utils/supabaseClient";
+import * as Location from "expo-location"; // Importando Location
+
+// --- DADOS DOS ECOPONTOS (Mesmos do Mapa) ---
+const ECOPONTOS = [
+  { title: "Ecoponto Boa Viagem", latitude: -8.1275, longitude: -34.902 },
+  { title: "Ecoponto Torre", latitude: -8.052, longitude: -34.91 },
+  { title: "Ecoponto Casa Forte", latitude: -8.037, longitude: -34.919 },
+  { title: "Ecoponto Ibura", latitude: -8.13, longitude: -34.94 },
+];
 
 // --- Componentes de Cards ---
 
-// 1. Card do Caminhão (EtaCard) - Recebe a função onPress
 const EtaCard = ({ onPress }) => (
   <View style={styles.etaCard}>
     <View style={styles.etaHeader}>
@@ -41,8 +50,7 @@ const EtaCard = ({ onPress }) => (
         </Text>
       </View>
     </View>
-    
-    {/* Botão que abre o mapa */}
+
     <TouchableOpacity style={styles.mapButton} onPress={onPress}>
       <Ionicons name="location-outline" size={20} color="#007BFF" />
       <Text style={styles.mapButtonText}>Ver Caminhão no Mapa</Text>
@@ -50,16 +58,29 @@ const EtaCard = ({ onPress }) => (
   </View>
 );
 
-const InfoCard = ({ icon, iconBgColor, title, subtitle, onPress }) => (
+const InfoCard = ({
+  icon,
+  iconBgColor,
+  title,
+  subtitle,
+  onPress,
+  isLoading,
+}) => (
   <TouchableOpacity style={styles.infoCard} onPress={onPress}>
-    <View
-      style={[styles.infoIconContainer, { backgroundColor: iconBgColor }]}
-    >
+    <View style={[styles.infoIconContainer, { backgroundColor: iconBgColor }]}>
       {icon}
     </View>
     <View style={styles.infoTextContainer}>
       <Text style={styles.infoTitle}>{title}</Text>
-      <Text style={styles.infoSubtitle}>{subtitle}</Text>
+      {isLoading ? (
+        <ActivityIndicator
+          size="small"
+          color="#666"
+          style={{ alignSelf: "flex-start" }}
+        />
+      ) : (
+        <Text style={styles.infoSubtitle}>{subtitle}</Text>
+      )}
     </View>
     <Ionicons name="chevron-forward" size={24} color="#ccc" />
   </TouchableOpacity>
@@ -87,40 +108,94 @@ export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState("Visitante");
   const [loading, setLoading] = useState(true);
 
-  // Função para abrir o mapa
+  // Estados para o Ecoponto Próximo
+  const [nearestEcopoint, setNearestEcopoint] = useState(null);
+  const [loadingLocation, setLoadingLocation] = useState(true);
+  const [userAddress, setUserAddress] = useState("Carregando localização...");
+
   const handleOpenMap = () => {
-    console.log("Tentando abrir o mapa..."); // Log para debug
     navigation.navigate("MapScreen");
   };
 
+  // Função Matemática de Distância (Haversine)
+  const calculateDistance = (lat1, lon1, lat2, lon2) => {
+    const R = 6371; // Raio da Terra em km
+    const dLat = (lat2 - lat1) * (Math.PI / 180);
+    const dLon = (lon2 - lon1) * (Math.PI / 180);
+    const a =
+      Math.sin(dLat / 2) * Math.sin(dLat / 2) +
+      Math.cos(lat1 * (Math.PI / 180)) *
+        Math.cos(lat2 * (Math.PI / 180)) *
+        Math.sin(dLon / 2) *
+        Math.sin(dLon / 2);
+    const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+    return R * c;
+  };
+
   useEffect(() => {
-    const fetchUserData = async () => {
-      setLoading(true);
-      const { data: { user }, error: authError } = await supabase.auth.getUser();
-
-      if (authError) {
-        console.error("Erro ao buscar usuário:", authError.message);
-        setLoading(false);
-        return;
-      }
-
+    const initData = async () => {
+      // 1. Buscar Usuário do Supabase
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (user) {
-        const { data: profile, error: dbError } = await supabase
+        const { data: profile } = await supabase
           .from("usuarios")
           .select("nome_razao_social")
           .eq("usuario_id", user.id)
           .single();
-
-        if (dbError) {
-          console.error("Erro ao buscar perfil:", dbError.message);
-        } else if (profile) {
-          setUserName(profile.nome_razao_social);
-        }
+        if (profile) setUserName(profile.nome_razao_social);
       }
       setLoading(false);
+
+      // 2. Buscar Localização e Calcular Ecoponto
+      try {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          setUserAddress("Permissão de localização negada");
+          setLoadingLocation(false);
+          return;
+        }
+
+        let location = await Location.getCurrentPositionAsync({});
+
+        // Pega o endereço legível (Rua)
+        let geocode = await Location.reverseGeocodeAsync(location.coords);
+        if (geocode.length > 0) {
+          setUserAddress(
+            `${geocode[0].street}, ${
+              geocode[0].district || geocode[0].subregion
+            }`
+          );
+        }
+
+        // Calcula o mais próximo
+        let minDistance = Infinity;
+        let closest = null;
+
+        ECOPONTOS.forEach((point) => {
+          const dist = calculateDistance(
+            location.coords.latitude,
+            location.coords.longitude,
+            point.latitude,
+            point.longitude
+          );
+          if (dist < minDistance) {
+            minDistance = dist;
+            closest = { ...point, distance: dist };
+          }
+        });
+
+        setNearestEcopoint(closest);
+      } catch (error) {
+        console.log("Erro ao obter localização:", error);
+        setUserAddress("Localização indisponível");
+      } finally {
+        setLoadingLocation(false);
+      }
     };
 
-    fetchUserData();
+    initData();
   }, []);
 
   if (loading) {
@@ -143,12 +218,15 @@ export default function HomeScreen({ navigation }) {
         {/* Cabeçalho */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Olá, {userName}! 👋</Text>
-          <Text style={styles.headerSubtitle}>
-            Veja quando o caminhão passa na sua rua
-          </Text>
+          <View
+            style={{ flexDirection: "row", alignItems: "center", marginTop: 5 }}
+          >
+            <Ionicons name="location-outline" size={14} color="#666" />
+            <Text style={styles.locationText}> {userAddress}</Text>
+          </View>
         </View>
 
-        {/* Card Principal de ETA - Passando a função de navegação */}
+        {/* Card Principal de ETA */}
         <EtaCard onPress={handleOpenMap} />
 
         {/* Seção de Informações Rápidas */}
@@ -159,14 +237,23 @@ export default function HomeScreen({ navigation }) {
           iconBgColor="#e0f8e6"
           title="Coleta Seletiva"
           subtitle="Às quartas-feiras"
-          onPress={() => navigation.navigate("HowItWorks")} // Atalho para educação
+          onPress={() => navigation.navigate("HowItWorks")}
         />
+
+        {/* Card Inteligente de Ecoponto */}
         <InfoCard
           icon={<Ionicons name="location-sharp" size={20} color="#8A2BE2" />}
           iconBgColor="#f0e6ff"
-          title="Ecoponto Mais Próximo"
-          subtitle="A 850m da sua casa"
-          onPress={() => navigation.navigate("MapScreen")} // Atalho para o mapa também
+          title={
+            nearestEcopoint ? nearestEcopoint.title : "Ecoponto Mais Próximo"
+          }
+          subtitle={
+            nearestEcopoint
+              ? `A ${nearestEcopoint.distance.toFixed(1)} km de você`
+              : "Localizando..."
+          }
+          isLoading={loadingLocation}
+          onPress={() => navigation.navigate("Ecopoints")} // Vai para a lista detalhada
         />
 
         {/* Card de Dica */}
@@ -199,6 +286,10 @@ const styles = StyleSheet.create({
     fontSize: 26,
     fontWeight: "bold",
     color: "#333",
+  },
+  locationText: {
+    fontSize: 14,
+    color: "#666",
   },
   headerSubtitle: {
     fontSize: 16,

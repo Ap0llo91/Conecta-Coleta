@@ -1,14 +1,22 @@
-import React from 'react';
-import { View, Text, StyleSheet, ScrollView, TouchableOpacity } from 'react-native';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons';
+import React from "react";
+import {
+  View,
+  Text,
+  StyleSheet,
+  ScrollView,
+  TouchableOpacity,
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 
 const RecyclingBenefitsScreen = ({ navigation }) => {
   return (
     <SafeAreaView style={styles.container}>
-      {/* Cabeçalho Verde (Tom um pouco mais escuro/azulado conforme a imagem) */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           <Ionicons name="arrow-back" size={24} color="white" />
           <Text style={styles.backText}>Voltar</Text>
         </TouchableOpacity>
@@ -16,10 +24,10 @@ const RecyclingBenefitsScreen = ({ navigation }) => {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        
         {/* Card 1: Meio Ambiente (Verde) */}
-        <BenefitCard 
-          color="#00A859" // Verde
+        {/* CORREÇÃO: Trocado 'tree' por 'leaf-outline' */}
+        <BenefitCard
+          color="#00A859"
           iconLibrary="Ionicons"
           iconName="leaf-outline"
           title="Meio Ambiente"
@@ -27,58 +35,64 @@ const RecyclingBenefitsScreen = ({ navigation }) => {
             "Reduz a extração de recursos naturais",
             "Diminui poluição do solo e água",
             "Preserva florestas e biodiversidade",
-            "Reduz emissão de gases do efeito estufa"
+            "Reduz emissão de gases do efeito estufa",
           ]}
         />
 
         {/* Card 2: Economia de Recursos (Azul) */}
-        <BenefitCard 
-          color="#2979FF" // Azul
+        <BenefitCard
+          color="#2979FF"
           iconLibrary="Ionicons"
-          iconName="water-outline" 
+          iconName="water-outline"
           title="Economia de Recursos"
           items={[
             "1 ton de papel reciclado = 20 árvores poupadas",
             "Economia de 95% de energia no alumínio",
             "Redução de 70% no consumo de água",
-            "Menor uso de energia em geral"
+            "Menor uso de energia em geral",
           ]}
         />
 
         {/* Card 3: Benefícios Sociais (Roxo) */}
-        <BenefitCard 
-          color="#9C27B0" // Roxo
+        <BenefitCard
+          color="#9C27B0"
           iconLibrary="Ionicons"
-          iconName="people-outline" 
+          iconName="people-outline"
           title="Benefícios Sociais"
           items={[
             "Geração de empregos",
             "Renda para cooperativas",
             "Inclusão social",
-            "Educação ambiental"
+            "Educação ambiental",
           ]}
         />
 
         {/* Card 4: Para a Cidade (Laranja) */}
-        <BenefitCard 
-          color="#EF6C00" // Laranja
+        <BenefitCard
+          color="#EF6C00"
           iconLibrary="MaterialCommunityIcons"
-          iconName="city-variant-outline" 
+          iconName="city-variant-outline"
           title="Para a Cidade"
           items={[
             "Reduz volume em aterros",
             "Menor custo de coleta",
             "Cidade mais limpa",
-            "Melhora qualidade de vida"
+            "Melhora qualidade de vida",
           ]}
         />
 
-        {/* Card Extra: Call to Action (Faça sua parte) */}
+        {/* Card Extra: Call to Action */}
         <View style={styles.actionCard}>
-          <Ionicons name="earth" size={40} color="#4CAF50" style={{ marginBottom: 10 }} />
+          <Ionicons
+            name="earth"
+            size={40}
+            color="#4CAF50"
+            style={{ marginBottom: 10 }}
+          />
           <Text style={styles.actionTitle}>Faça sua parte!</Text>
           <Text style={styles.actionText}>
-            Cada ação individual contribui para um planeta mais sustentável. Separar o lixo é o primeiro passo!
+            Cada ação individual contribui para um planeta mais sustentável.
+            Separar o lixo é o primeiro passo!
           </Text>
         </View>
 
@@ -88,15 +102,21 @@ const RecyclingBenefitsScreen = ({ navigation }) => {
   );
 };
 
-// Componente Reutilizável para os Cards de Benefício
 const BenefitCard = ({ color, iconLibrary, iconName, title, items }) => {
-  // Seleciona a biblioteca de ícones correta
-  const IconComponent = iconLibrary === 'MaterialCommunityIcons' ? MaterialCommunityIcons : Ionicons;
+  const IconComponent =
+    iconLibrary === "MaterialCommunityIcons"
+      ? MaterialCommunityIcons
+      : Ionicons;
 
   return (
     <View style={[styles.card, { borderColor: color }]}>
       <View style={styles.cardHeader}>
-        <IconComponent name={iconName} size={28} color={color} style={{ marginRight: 10 }} />
+        <IconComponent
+          name={iconName}
+          size={28}
+          color={color}
+          style={{ marginRight: 10 }}
+        />
         <Text style={[styles.cardTitle, { color: color }]}>{title}</Text>
       </View>
       <View style={styles.listContainer}>
@@ -112,85 +132,61 @@ const BenefitCard = ({ color, iconLibrary, iconName, title, items }) => {
 };
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: '#F0F2F5' },
+  container: { flex: 1, backgroundColor: "#F0F2F5" },
   header: {
-    backgroundColor: '#00897B', // Verde Teal (baseado na imagem)
+    backgroundColor: "#00897B",
     paddingTop: 20,
     paddingBottom: 25,
     paddingHorizontal: 20,
   },
-  backButton: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },
-  backText: { color: 'white', fontSize: 16, marginLeft: 5, fontWeight: '500' },
-  headerTitle: { fontSize: 24, fontWeight: 'bold', color: 'white' },
-  
-  content: { padding: 20 },
+  backButton: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
+  backText: { color: "white", fontSize: 16, marginLeft: 5, fontWeight: "500" },
+  headerTitle: { fontSize: 24, fontWeight: "bold", color: "white" },
 
-  // Estilo do Card de Benefício
+  content: { padding: 20 },
   card: {
-    backgroundColor: 'white',
+    backgroundColor: "white",
     borderRadius: 15,
     padding: 20,
     marginBottom: 20,
-    borderWidth: 1.5, // Borda colorida
-    // Sombra leve
+    borderWidth: 1.5,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
   cardHeader: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     marginBottom: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
+    borderBottomColor: "#F0F0F0",
     paddingBottom: 10,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-  },
-  listContainer: {
-    paddingLeft: 5,
-  },
-  listItem: {
-    flexDirection: 'row',
-    marginBottom: 8,
-    alignItems: 'flex-start',
-  },
-  bullet: {
-    fontSize: 16,
-    color: '#666',
-    marginRight: 8,
-    lineHeight: 22,
-  },
-  itemText: {
-    fontSize: 15,
-    color: '#444',
-    lineHeight: 22,
-    flex: 1,
-  },
-
-  // Card Final (Call to Action)
+  cardTitle: { fontSize: 18, fontWeight: "bold" },
+  listContainer: { paddingLeft: 5 },
+  listItem: { flexDirection: "row", marginBottom: 8, alignItems: "flex-start" },
+  bullet: { fontSize: 16, color: "#666", marginRight: 8, lineHeight: 22 },
+  itemText: { fontSize: 15, color: "#444", lineHeight: 22, flex: 1 },
   actionCard: {
-    backgroundColor: '#E8F5E9', // Verde bem clarinho
+    backgroundColor: "#E8F5E9",
     borderRadius: 15,
     padding: 25,
-    alignItems: 'center',
+    alignItems: "center",
     borderWidth: 1,
-    borderColor: '#C8E6C9',
+    borderColor: "#C8E6C9",
   },
   actionTitle: {
     fontSize: 18,
-    fontWeight: 'bold',
-    color: '#2E7D32',
+    fontWeight: "bold",
+    color: "#2E7D32",
     marginBottom: 10,
   },
   actionText: {
     fontSize: 14,
-    color: '#1B5E20',
-    textAlign: 'center',
+    color: "#1B5E20",
+    textAlign: "center",
     lineHeight: 20,
   },
 });

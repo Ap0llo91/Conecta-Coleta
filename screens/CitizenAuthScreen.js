@@ -8,29 +8,24 @@ import {
   ScrollView,
   Alert,
 } from "react-native";
-// 1. Importação correta para Safe Area
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import { supabase } from "../utils/supabaseClient";
 
-// { navigation, route } são passados automaticamente
 export default function CitizenAuthScreen({ navigation, route }) {
-  // Pega o parâmetro 'mode' que enviamos da tela anterior
   const mode = route.params?.mode;
-
-  // Se 'mode' for 'register', começamos na tela de cadastro (isRegisterMode = true)
   const isRegisterMode = mode === "register";
 
   return (
-    // 2. Trocamos a View principal por SafeAreaView
     <SafeAreaView style={styles.safeArea}>
-      <ScrollView style={{ flex: 1 }} contentContainerStyle={styles.container}>
-        {/* Ícone de Usuário */}
+      <ScrollView
+        style={{ flex: 1 }}
+        contentContainerStyle={styles.container}
+        showsVerticalScrollIndicator={false}
+      >
         <View style={styles.iconContainer}>
           <Ionicons name="person-circle" size={80} color="#007BFF" />
         </View>
-
-        {/* Renderiza o formulário de Login OU Cadastro baseado no 'mode' */}
         {isRegisterMode ? (
           <RegisterForm />
         ) : (
@@ -41,33 +36,24 @@ export default function CitizenAuthScreen({ navigation, route }) {
   );
 }
 
-// --- Componente de Formulário de Login ---
 const LoginForm = ({ navigation }) => {
-  const [email, setEmail] = useState(""); // Estado para email
-  const [password, setPassword] = useState(""); // Estado para senha
+  const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // 2. FUNÇÃO DE LOGIN DO SUPABASE
   const handleLogin = async () => {
     if (loading) return;
     setLoading(true);
-
     const { data, error } = await supabase.auth.signInWithPassword({
-      email: email,
-      password: password,
+      email,
+      password,
     });
-
     if (error) {
       Alert.alert("Erro no Login", error.message);
       setLoading(false);
       return;
     }
-
-    if (data.user) {
-      // 'replace' impede o usuário de apertar "Voltar" e cair no login de novo.
-      navigation.replace("AppTabs");
-    }
-
+    if (data.user) navigation.replace("AppTabs");
     setLoading(false);
   };
 
@@ -82,7 +68,6 @@ const LoginForm = ({ navigation }) => {
         value={email}
         onChangeText={setEmail}
       />
-
       <Text style={styles.label}>Senha</Text>
       <TextInput
         style={styles.input}
@@ -91,7 +76,6 @@ const LoginForm = ({ navigation }) => {
         value={password}
         onChangeText={setPassword}
       />
-
       <TouchableOpacity
         style={[styles.button, styles.blueButton]}
         onPress={handleLogin}
@@ -101,11 +85,9 @@ const LoginForm = ({ navigation }) => {
           {loading ? "Entrando..." : "Entrar"}
         </Text>
       </TouchableOpacity>
-
       <TouchableOpacity onPress={() => navigation.navigate("ForgotPassword")}>
         <Text style={styles.forgotPassword}>Esqueceu a senha?</Text>
       </TouchableOpacity>
-
       <TouchableOpacity onPress={() => navigation.navigate("RegisterChoice")}>
         <Text style={styles.createAccountText}>
           Primeira vez aqui?{" "}
@@ -116,25 +98,64 @@ const LoginForm = ({ navigation }) => {
   );
 };
 
-// --- Componente de Formulário de Cadastro ---
 const RegisterForm = () => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
   const [nome, setNome] = useState("");
+
+  // Estados formatados
   const [cpf, setCpf] = useState("");
   const [telefone, setTelefone] = useState("");
-  const [endereco, setEndereco] = useState("");
+
+  // Endereço dividido
+  const [rua, setRua] = useState("");
+  const [numero, setNumero] = useState("");
+  const [bairro, setBairro] = useState("");
+  const [semNumero, setSemNumero] = useState(false);
+
   const [loading, setLoading] = useState(false);
 
-  // 3. FUNÇÃO DE CADASTRO NO SUPABASE
+  // --- MÁSCARAS ---
+  const maskCPF = (text) => {
+    let v = text.replace(/\D/g, "");
+    v = v.substring(0, 11);
+    v = v.replace(/(\d{3})(\d)/, "$1.$2");
+    v = v.replace(/(\d{3})(\d)/, "$1.$2");
+    v = v.replace(/(\d{3})(\d{1,2})$/, "$1-$2");
+    setCpf(v);
+  };
+
+  const maskPhone = (text) => {
+    let v = text.replace(/\D/g, "");
+    v = v.substring(0, 11);
+    if (v.length > 10) {
+      v = v.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, "($1) $2 $3-$4");
+    } else if (v.length > 5) {
+      v = v.replace(/^(\d{2})(\d{4})(\d{0,4})$/, "($1) $2-$3");
+    } else if (v.length > 2) {
+      v = v.replace(/^(\d{2})(\d{0,5})$/, "($1) $2");
+    }
+    setTelefone(v);
+  };
+
   const handleRegister = async () => {
     if (loading) return;
-    setLoading(true);
 
-    // 1. Tenta criar o usuário no Supabase Auth
+    if (!rua || !bairro || (!numero && !semNumero)) {
+      Alert.alert(
+        "Endereço",
+        "Por favor, preencha todos os campos do endereço."
+      );
+      return;
+    }
+
+    setLoading(true);
+    const cpfLimpo = cpf.replace(/\D/g, "");
+    const telLimpo = telefone.replace(/\D/g, "");
+
     const { data: authData, error: authError } = await supabase.auth.signUp({
-      email: email,
-      password: password,
+      email,
+      password,
     });
 
     if (authError) {
@@ -143,13 +164,14 @@ const RegisterForm = () => {
       return;
     }
 
-    // 2. Tenta salvar os dados extras na tabela 'Usuarios'
+    // Salva na tabela usuarios
     const { error: dbError } = await supabase.from("usuarios").insert({
       usuario_id: authData.user.id,
       tipo_usuario: "CPF",
-      cpf_cnpj: cpf,
+      cpf_cnpj: cpfLimpo,
       nome_razao_social: nome,
       email: email,
+      telefone: telLimpo,
     });
 
     if (dbError) {
@@ -158,13 +180,16 @@ const RegisterForm = () => {
       return;
     }
 
-    // 3. Salva os dados de endereço na tabela 'Enderecos'
+    // Salva endereço separado
+    const numeroFinal = semNumero ? "S/N" : numero;
     const { error: addrError } = await supabase.from("enderecos").insert({
       usuario_id: authData.user.id,
-      rua: endereco,
-      cep: "00000-000", // Placeholder
-      latitude: 0, // Placeholder
-      longitude: 0, // Placeholder
+      rua: rua,
+      numero: numeroFinal,
+      bairro: bairro,
+      cep: "00000-000",
+      latitude: 0,
+      longitude: 0,
       is_padrao: true,
     });
 
@@ -176,7 +201,6 @@ const RegisterForm = () => {
 
     setLoading(false);
     Alert.alert("Sucesso!", "Conta criada. Você já pode fazer o login!");
-    // Idealmente, levaria o usuário para a tela de login
   };
 
   return (
@@ -195,7 +219,8 @@ const RegisterForm = () => {
         placeholder="000.000.000-00"
         keyboardType="numeric"
         value={cpf}
-        onChangeText={setCpf}
+        onChangeText={maskCPF}
+        maxLength={14}
       />
 
       <Text style={styles.label}>Email</Text>
@@ -211,18 +236,57 @@ const RegisterForm = () => {
       <Text style={styles.label}>Telefone</Text>
       <TextInput
         style={styles.input}
-        placeholder="(00) 00000-0000"
+        placeholder="(81) 9 0000-0000"
         keyboardType="phone-pad"
         value={telefone}
-        onChangeText={setTelefone}
+        onChangeText={maskPhone}
+        maxLength={15}
       />
 
-      <Text style={styles.label}>Endereço</Text>
+      {/* Endereço Dividido */}
+      <Text style={styles.sectionHeader}>Endereço</Text>
+
+      <Text style={styles.label}>Logradouro (Rua/Av)</Text>
       <TextInput
         style={styles.input}
-        placeholder="Rua, número, bairro"
-        value={endereco}
-        onChangeText={setEndereco}
+        placeholder="Ex: Rua das Flores"
+        value={rua}
+        onChangeText={setRua}
+      />
+
+      <View style={styles.row}>
+        <View style={{ flex: 1, marginRight: 10 }}>
+          <Text style={styles.label}>Número</Text>
+          <TextInput
+            style={[styles.input, semNumero && styles.disabledInput]}
+            placeholder="123"
+            value={semNumero ? "S/N" : numero}
+            onChangeText={setNumero}
+            editable={!semNumero}
+            keyboardType="numeric"
+          />
+        </View>
+
+        <TouchableOpacity
+          style={styles.checkboxContainer}
+          onPress={() => {
+            setSemNumero(!semNumero);
+            if (!semNumero) setNumero("");
+          }}
+        >
+          <View style={[styles.checkbox, semNumero && styles.checkedCheckbox]}>
+            {semNumero && <Ionicons name="checkmark" size={16} color="white" />}
+          </View>
+          <Text style={styles.checkboxLabel}>Sem número</Text>
+        </TouchableOpacity>
+      </View>
+
+      <Text style={styles.label}>Bairro</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="Ex: Boa Viagem"
+        value={bairro}
+        onChangeText={setBairro}
       />
 
       <Text style={styles.label}>Senha</Text>
@@ -243,36 +307,25 @@ const RegisterForm = () => {
           {loading ? "Cadastrando..." : "Cadastrar"}
         </Text>
       </TouchableOpacity>
+
+      <View style={{ height: 40 }} />
     </View>
   );
 };
 
-// --- Estilos ---
 const styles = StyleSheet.create({
-  // Adicionado estilo para SafeAreaView
-  safeArea: {
-    flex: 1,
-    backgroundColor: "#fff",
+  safeArea: { flex: 1, backgroundColor: "#fff" },
+  container: { flexGrow: 1, alignItems: "center", padding: 20 },
+  iconContainer: { marginTop: 20, marginBottom: 30 },
+  formContainer: { width: "100%" },
+  sectionHeader: {
+    fontSize: 16,
+    fontWeight: "bold",
+    color: "#007BFF",
+    marginTop: 10,
+    marginBottom: 10,
   },
-  container: {
-    flexGrow: 1,
-    // backgroundColor: '#fff', // Removido daqui pois já está no safeArea
-    alignItems: "center",
-    padding: 20,
-  },
-  iconContainer: {
-    marginTop: 20,
-    marginBottom: 30,
-  },
-  formContainer: {
-    width: "100%",
-  },
-  label: {
-    fontSize: 14,
-    color: "#333",
-    marginBottom: 5,
-    marginLeft: 5,
-  },
+  label: { fontSize: 14, color: "#333", marginBottom: 5, marginLeft: 5 },
   input: {
     backgroundColor: "#f9f9f9",
     borderWidth: 1,
@@ -282,32 +335,41 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     fontSize: 16,
   },
+  disabledInput: { backgroundColor: "#eee", color: "#999" },
+  row: { flexDirection: "row", alignItems: "center", marginBottom: 5 },
+  checkboxContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    height: 50,
+    marginTop: 5,
+  },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: "#007BFF",
+    marginRight: 8,
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "white",
+  },
+  checkedCheckbox: { backgroundColor: "#007BFF" },
+  checkboxLabel: { fontSize: 14, color: "#333" },
   button: {
     borderRadius: 10,
     padding: 18,
     alignItems: "center",
     marginTop: 10,
   },
-  blueButton: {
-    backgroundColor: "#007BFF",
-  },
-  buttonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-  },
+  blueButton: { backgroundColor: "#007BFF" },
+  buttonText: { color: "#fff", fontSize: 16, fontWeight: "bold" },
   forgotPassword: {
     color: "#007BFF",
     textAlign: "center",
     marginTop: 20,
     marginBottom: 20,
   },
-  createAccountText: {
-    fontSize: 16,
-    color: "#666",
-  },
-  createAccountLink: {
-    color: "#007BFF",
-    fontWeight: "bold",
-  },
+  createAccountText: { fontSize: 16, color: "#666" },
+  createAccountLink: { color: "#007BFF", fontWeight: "bold" },
 });

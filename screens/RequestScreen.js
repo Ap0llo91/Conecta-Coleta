@@ -6,24 +6,12 @@ import {
   ScrollView,
   TouchableOpacity,
 } from "react-native";
-// IMPORT NOVO: Usando a biblioteca correta para Safe Area
 import { SafeAreaView } from "react-native-safe-area-context";
-import {
-  Ionicons,
-  MaterialCommunityIcons,
-  FontAwesome5,
-} from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { StatusBar } from "expo-status-bar";
 
 // Componente para os 3 cards grandes de opção
-const OptionCard = ({
-  icon,
-  iconColor,
-  iconBgColor,
-  title,
-  subtitle,
-  onPress,
-}) => (
+const OptionCard = ({ icon, iconBgColor, title, subtitle, onPress }) => (
   <TouchableOpacity style={styles.optionCard} onPress={onPress}>
     <View
       style={[styles.optionIconContainer, { backgroundColor: iconBgColor }]}
@@ -39,14 +27,7 @@ const OptionCard = ({
 );
 
 // Componente para os 2 cards pequenos de "Mais Usados"
-const UsedServiceCard = ({
-  icon,
-  iconColor,
-  iconBgColor,
-  title,
-  subtitle,
-  onPress,
-}) => (
+const UsedServiceCard = ({ icon, iconBgColor, title, subtitle, onPress }) => (
   <TouchableOpacity style={styles.usedServiceCard} onPress={onPress}>
     <View style={[styles.usedIconContainer, { backgroundColor: iconBgColor }]}>
       {icon}
@@ -57,7 +38,7 @@ const UsedServiceCard = ({
 );
 
 export default function RequestScreen({ navigation }) {
-  // Navegação
+  // --- Navegação dos Cards Grandes (Menu Principal) ---
   const onReportProblem = () => {
     navigation.navigate("ReportProblem");
   };
@@ -66,21 +47,24 @@ export default function RequestScreen({ navigation }) {
     navigation.navigate("ScheduleService");
   };
 
-  // Placeholders para o futuro
   const onFindDisposalSite = () => {
-    console.log("Navegar para Encontrar Local");
+    // NAVEGAÇÃO ATUALIZADA: Abre a nova tela de Encontrar Local
+    navigation.navigate("FindDisposalSite");
   };
+
+  // --- Navegação dos Atalhos (Serviços Mais Usados) ---
+
+  // 1. Atalho direto para Cata-Treco
   const onCataTreco = () => {
-    // Atalho direto para o Cata-Treco
     navigation.navigate("RequestCataTreco");
   };
+
+  // 2. Atalho direto para Caçamba
   const onCacamba = () => {
-    // Atalho direto para a Caçamba
     navigation.navigate("RequestDumpster");
   };
 
   return (
-    // Trocado View por SafeAreaView
     <SafeAreaView style={styles.container}>
       <StatusBar style="light" />
 
@@ -96,7 +80,7 @@ export default function RequestScreen({ navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Cards de Opção */}
+        {/* Cards de Opção (Menu Principal) */}
         <OptionCard
           icon={<Ionicons name="camera-outline" size={24} color="#E74C3C" />}
           iconBgColor="#FADBD8"
@@ -111,6 +95,8 @@ export default function RequestScreen({ navigation }) {
           subtitle="Coleta de móveis velhos, entulho ou caçamba"
           onPress={onScheduleService}
         />
+
+        {/* Botão Encontrar Local - Agora funcional */}
         <OptionCard
           icon={<Ionicons name="location-outline" size={24} color="#27AE60" />}
           iconBgColor="#D4EFDF"
@@ -119,7 +105,7 @@ export default function RequestScreen({ navigation }) {
           onPress={onFindDisposalSite}
         />
 
-        {/* Seção "Serviços Mais Usados" */}
+        {/* Seção "Serviços Mais Usados" (Atalhos) */}
         <Text style={styles.sectionTitle}>Serviços Mais Usados</Text>
         <View style={styles.usedContainer}>
           <UsedServiceCard
@@ -135,6 +121,7 @@ export default function RequestScreen({ navigation }) {
             subtitle="Móveis grandes"
             onPress={onCataTreco}
           />
+
           <UsedServiceCard
             icon={
               <MaterialCommunityIcons
@@ -173,13 +160,12 @@ export default function RequestScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: "#007BFF", // O fundo da tela inteira é azul
+    backgroundColor: "#007BFF",
   },
   header: {
-    // paddingTop: 60, // REMOVIDO: SafeAreaView já cuida do topo
     paddingHorizontal: 20,
     paddingBottom: 20,
-    paddingTop: 20, // Adicionado um padding pequeno apenas para respiro
+    paddingTop: 20,
   },
   headerTitle: {
     fontSize: 26,
@@ -192,17 +178,16 @@ const styles = StyleSheet.create({
     opacity: 0.9,
   },
   scrollContainer: {
-    flex: 1, // Ocupa o resto da tela
-    backgroundColor: "#F0F2F5", // Fundo cinza claro
-    borderTopLeftRadius: 25, // Borda arredondada
-    borderTopRightRadius: 25, // Borda arredondada
-    overflow: 'hidden', // Garante que o conteúdo não "vaze" das bordas arredondadas
+    flex: 1,
+    backgroundColor: "#F0F2F5",
+    borderTopLeftRadius: 25,
+    borderTopRightRadius: 25,
+    overflow: "hidden",
   },
   scrollContent: {
-    padding: 20, // Espaçamento interno normal
-    paddingBottom: 40, // Um pouco mais de espaço no final
+    padding: 20,
+    paddingBottom: 40,
   },
-  // Cards Grandes
   optionCard: {
     flexDirection: "row",
     backgroundColor: "#fff",
@@ -236,7 +221,6 @@ const styles = StyleSheet.create({
     color: "#666",
     flexWrap: "wrap",
   },
-  // Cards Pequenos
   sectionTitle: {
     fontSize: 20,
     fontWeight: "bold",
@@ -276,7 +260,6 @@ const styles = StyleSheet.create({
     fontSize: 14,
     color: "#666",
   },
-  // Box de Informação
   infoBox: {
     flexDirection: "row",
     backgroundColor: "#e6f2ff",
