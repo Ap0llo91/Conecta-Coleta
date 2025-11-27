@@ -9,6 +9,8 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView, // <--- Importado
+  Platform // <--- Importado
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -88,111 +90,117 @@ const RequestDumpsterScreen = ({ navigation }) => {
         </Text>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        <Text style={styles.label}>Nome Completo</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Seu nome"
-          value={nome}
-          onChangeText={setNome}
-        />
-
-        <Text style={styles.label}>CPF</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="000.000.000-00"
-          keyboardType="numeric"
-          value={cpf}
-          onChangeText={setCpf}
-        />
-
-        {/* Campo de Endereço com GPS */}
-        <Text style={styles.label}>Endereço</Text>
-        <View style={styles.addressContainer}>
+      {/* WRAPPER KEYBOARD AVOIDING VIEW ADICIONADO AQUI */}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <Text style={styles.label}>Nome Completo</Text>
           <TextInput
-            style={styles.inputAddress}
-            placeholder="Rua, número, bairro"
-            value={endereco}
-            onChangeText={setEndereco}
+            style={styles.input}
+            placeholder="Seu nome"
+            value={nome}
+            onChangeText={setNome}
           />
-          <TouchableOpacity
-            onPress={handleGetLocation}
-            disabled={loadingLocation}
-          >
-            {loadingLocation ? (
-              <ActivityIndicator size="small" color="#FF4500" />
-            ) : (
-              <Ionicons name="location-outline" size={24} color="#FF4500" />
-            )}
-          </TouchableOpacity>
-        </View>
-        <Text style={styles.locationHelper}>Ou use sua localização atual</Text>
 
-        <Text style={styles.label}>Tipo de Resíduo</Text>
-        <TouchableOpacity
-          style={styles.dropdown}
-          onPress={() => setModalVisible(true)}
-        >
-          <Text style={tipoResiduo ? styles.inputText : styles.placeholderText}>
-            {tipoResiduo || "Selecione o tipo"}
-          </Text>
-          <Ionicons name="chevron-down" size={24} color="#666" />
-        </TouchableOpacity>
-
-        <Text style={styles.label}>Volume Estimado (m³)</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex: 3"
-          keyboardType="numeric"
-          value={volume}
-          onChangeText={setVolume}
-        />
-
-        <Text style={styles.label}>Data Desejada</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="dd/mm/aaaa"
-          value={data}
-          onChangeText={setData}
-        />
-
-        <Text style={styles.label}>Observações</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Informações adicionais sobre o local ou material"
-          multiline
-          numberOfLines={4}
-          value={observacao}
-          onChangeText={setObservacao}
-        />
-
-        <View style={styles.warningBox}>
-          <MaterialCommunityIcons
-            name="calendar-clock"
-            size={24}
-            color="#E65100"
+          <Text style={styles.label}>CPF</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="000.000.000-00"
+            keyboardType="numeric"
+            value={cpf}
+            onChangeText={setCpf}
           />
-          <View style={styles.warningTextContainer}>
-            <Text style={styles.warningText}>
-              A instalação da caçamba está sujeita a análise e disponibilidade.
-            </Text>
-            <Text
-              style={[styles.warningText, { marginTop: 4, fontWeight: "bold" }]}
+
+          {/* Campo de Endereço com GPS */}
+          <Text style={styles.label}>Endereço</Text>
+          <View style={styles.addressContainer}>
+            <TextInput
+              style={styles.inputAddress}
+              placeholder="Rua, número, bairro"
+              value={endereco}
+              onChangeText={setEndereco}
+            />
+            <TouchableOpacity
+              onPress={handleGetLocation}
+              disabled={loadingLocation}
             >
-              Prazo médio de atendimento: 3-5 dias úteis.
-            </Text>
+              {loadingLocation ? (
+                <ActivityIndicator size="small" color="#FF4500" />
+              ) : (
+                <Ionicons name="location-outline" size={24} color="#FF4500" />
+              )}
+            </TouchableOpacity>
           </View>
-        </View>
+          <Text style={styles.locationHelper}>Ou use sua localização atual</Text>
 
-        <TouchableOpacity
-          style={styles.submitButton}
-          onPress={() => console.log("Enviando...")}
-        >
-          <Text style={styles.submitButtonText}>Enviar Solicitação</Text>
-        </TouchableOpacity>
+          <Text style={styles.label}>Tipo de Resíduo</Text>
+          <TouchableOpacity
+            style={styles.dropdown}
+            onPress={() => setModalVisible(true)}
+          >
+            <Text style={tipoResiduo ? styles.inputText : styles.placeholderText}>
+              {tipoResiduo || "Selecione o tipo"}
+            </Text>
+            <Ionicons name="chevron-down" size={24} color="#666" />
+          </TouchableOpacity>
 
-        <View style={{ height: 40 }} />
-      </ScrollView>
+          <Text style={styles.label}>Volume Estimado (m³)</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ex: 3"
+            keyboardType="numeric"
+            value={volume}
+            onChangeText={setVolume}
+          />
+
+          <Text style={styles.label}>Data Desejada</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="dd/mm/aaaa"
+            value={data}
+            onChangeText={setData}
+          />
+
+          <Text style={styles.label}>Observações</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Informações adicionais sobre o local ou material"
+            multiline
+            numberOfLines={4}
+            value={observacao}
+            onChangeText={setObservacao}
+          />
+
+          <View style={styles.warningBox}>
+            <MaterialCommunityIcons
+              name="calendar-clock"
+              size={24}
+              color="#E65100"
+            />
+            <View style={styles.warningTextContainer}>
+              <Text style={styles.warningText}>
+                A instalação da caçamba está sujeita a análise e disponibilidade.
+              </Text>
+              <Text
+                style={[styles.warningText, { marginTop: 4, fontWeight: "bold" }]}
+              >
+                Prazo médio de atendimento: 3-5 dias úteis.
+              </Text>
+            </View>
+          </View>
+
+          <TouchableOpacity
+            style={styles.submitButton}
+            onPress={() => console.log("Enviando...")}
+          >
+            <Text style={styles.submitButtonText}>Enviar Solicitação</Text>
+          </TouchableOpacity>
+
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
         <View style={styles.modalContainer}>

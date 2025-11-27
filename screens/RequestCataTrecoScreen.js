@@ -9,8 +9,9 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
+  KeyboardAvoidingView, // <--- Importado
+  Platform // <--- Importado
 } from "react-native";
-// 1. Importação da biblioteca de Safe Area (Segurança de layout)
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
@@ -82,7 +83,6 @@ const RequestCataTrecoScreen = ({ navigation }) => {
   };
 
   return (
-    // 2. Trocamos View por SafeAreaView para garantir o topo da tela
     <SafeAreaView style={styles.container}>
       {/* Cabeçalho Roxo */}
       <View style={styles.header}>
@@ -99,125 +99,131 @@ const RequestCataTrecoScreen = ({ navigation }) => {
         </Text>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* Endereço com GPS */}
-        <Text style={styles.label}>Endereço Completo</Text>
-        <View style={styles.addressContainer}>
+      {/* WRAPPER KEYBOARD AVOIDING VIEW ADICIONADO AQUI */}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          {/* Endereço com GPS */}
+          <Text style={styles.label}>Endereço Completo</Text>
+          <View style={styles.addressContainer}>
+            <TextInput
+              style={styles.inputAddress}
+              placeholder="Rua, número, complemento"
+              value={endereco}
+              onChangeText={setEndereco}
+            />
+            <TouchableOpacity
+              onPress={handleGetLocation}
+              disabled={loadingLocation}
+            >
+              {loadingLocation ? (
+                <ActivityIndicator size="small" color="#8A2BE2" />
+              ) : (
+                <Ionicons name="location-outline" size={24} color="#8A2BE2" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          <Text style={styles.label}>Ponto de Referência</Text>
           <TextInput
-            style={styles.inputAddress}
-            placeholder="Rua, número, complemento"
-            value={endereco}
-            onChangeText={setEndereco}
+            style={styles.input}
+            placeholder="Ex: Próximo ao supermercado"
+            value={pontoReferencia}
+            onChangeText={setPontoReferencia}
           />
+
+          {/* CHECKBOXES DE ITENS */}
+          <Text style={styles.label}>Itens a coletar</Text>
+          <View style={styles.checkboxGroup}>
+            <Checkbox
+              label="Sofá"
+              checked={itensSelecionados.sofa}
+              onPress={() => toggleItem("sofa")}
+            />
+            <Checkbox
+              label="Geladeira"
+              checked={itensSelecionados.geladeira}
+              onPress={() => toggleItem("geladeira")}
+            />
+            <Checkbox
+              label="Fogão"
+              checked={itensSelecionados.fogao}
+              onPress={() => toggleItem("fogao")}
+            />
+            <Checkbox
+              label="Colchão"
+              checked={itensSelecionados.colchao}
+              onPress={() => toggleItem("colchao")}
+            />
+            <Checkbox
+              label="Mesa"
+              checked={itensSelecionados.mesa}
+              onPress={() => toggleItem("mesa")}
+            />
+            <Checkbox
+              label="Armário"
+              checked={itensSelecionados.armario}
+              onPress={() => toggleItem("armario")}
+            />
+            <Checkbox
+              label="Outros"
+              checked={itensSelecionados.outros}
+              onPress={() => toggleItem("outros")}
+            />
+          </View>
+
+          <Text style={styles.label}>Outros Itens (Descrição)</Text>
+          <TextInput
+            style={[styles.input, styles.textArea]}
+            placeholder="Descreva o que mais será coletado..."
+            multiline
+            numberOfLines={3}
+            value={outrosItens}
+            onChangeText={setOutrosItens}
+          />
+
+          <Text style={styles.label}>Quantidade Total de Itens</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="Ex: 3"
+            keyboardType="numeric"
+            value={quantidade}
+            onChangeText={setQuantidade}
+          />
+
+          <Text style={styles.label}>Telefone de Contato</Text>
+          <TextInput
+            style={styles.input}
+            placeholder="(81) 99999-9999"
+            keyboardType="phone-pad"
+            value={telefone}
+            onChangeText={setTelefone}
+          />
+
+          {/* Dropdown de Período */}
+          <Text style={styles.label}>Período Preferencial</Text>
           <TouchableOpacity
-            onPress={handleGetLocation}
-            disabled={loadingLocation}
+            style={styles.dropdown}
+            onPress={() => setModalPeriodoVisible(true)}
           >
-            {loadingLocation ? (
-              <ActivityIndicator size="small" color="#8A2BE2" />
-            ) : (
-              <Ionicons name="location-outline" size={24} color="#8A2BE2" />
-            )}
+            <Text style={periodo ? styles.inputText : styles.placeholderText}>
+              {periodo || "Selecione o período"}
+            </Text>
+            <Ionicons name="chevron-down" size={24} color="#666" />
           </TouchableOpacity>
-        </View>
 
-        <Text style={styles.label}>Ponto de Referência</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex: Próximo ao supermercado"
-          value={pontoReferencia}
-          onChangeText={setPontoReferencia}
-        />
+          <TouchableOpacity
+            style={styles.submitButton}
+            onPress={() => console.log("Agendando...")}
+          >
+            <Text style={styles.submitButtonText}>Agendar Coleta</Text>
+          </TouchableOpacity>
 
-        {/* CHECKBOXES DE ITENS */}
-        <Text style={styles.label}>Itens a coletar</Text>
-        <View style={styles.checkboxGroup}>
-          <Checkbox
-            label="Sofá"
-            checked={itensSelecionados.sofa}
-            onPress={() => toggleItem("sofa")}
-          />
-          <Checkbox
-            label="Geladeira"
-            checked={itensSelecionados.geladeira}
-            onPress={() => toggleItem("geladeira")}
-          />
-          <Checkbox
-            label="Fogão"
-            checked={itensSelecionados.fogao}
-            onPress={() => toggleItem("fogao")}
-          />
-          <Checkbox
-            label="Colchão"
-            checked={itensSelecionados.colchao}
-            onPress={() => toggleItem("colchao")}
-          />
-          <Checkbox
-            label="Mesa"
-            checked={itensSelecionados.mesa}
-            onPress={() => toggleItem("mesa")}
-          />
-          <Checkbox
-            label="Armário"
-            checked={itensSelecionados.armario}
-            onPress={() => toggleItem("armario")}
-          />
-          <Checkbox
-            label="Outros"
-            checked={itensSelecionados.outros}
-            onPress={() => toggleItem("outros")}
-          />
-        </View>
-
-        <Text style={styles.label}>Outros Itens (Descrição)</Text>
-        <TextInput
-          style={[styles.input, styles.textArea]}
-          placeholder="Descreva o que mais será coletado..."
-          multiline
-          numberOfLines={3}
-          value={outrosItens}
-          onChangeText={setOutrosItens}
-        />
-
-        <Text style={styles.label}>Quantidade Total de Itens</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="Ex: 3"
-          keyboardType="numeric"
-          value={quantidade}
-          onChangeText={setQuantidade}
-        />
-
-        <Text style={styles.label}>Telefone de Contato</Text>
-        <TextInput
-          style={styles.input}
-          placeholder="(81) 99999-9999"
-          keyboardType="phone-pad"
-          value={telefone}
-          onChangeText={setTelefone}
-        />
-
-        {/* Dropdown de Período */}
-        <Text style={styles.label}>Período Preferencial</Text>
-        <TouchableOpacity
-          style={styles.dropdown}
-          onPress={() => setModalPeriodoVisible(true)}
-        >
-          <Text style={periodo ? styles.inputText : styles.placeholderText}>
-            {periodo || "Selecione o período"}
-          </Text>
-          <Ionicons name="chevron-down" size={24} color="#666" />
-        </TouchableOpacity>
-
-        <TouchableOpacity
-          style={styles.submitButton}
-          onPress={() => console.log("Agendando...")}
-        >
-          <Text style={styles.submitButtonText}>Agendar Coleta</Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 40 }} />
-      </ScrollView>
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Modal de Período */}
       <Modal
@@ -267,9 +273,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9F9F9" },
   header: {
     backgroundColor: "#8A2BE2", // Roxo (BlueViolet)
-    // 3. Ajustamos o padding para funcionar com SafeAreaView
-    // Antes era 50, agora 20 é suficiente porque o SafeAreaView já empurra o conteúdo
-    paddingTop: 20, 
+    paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
   },

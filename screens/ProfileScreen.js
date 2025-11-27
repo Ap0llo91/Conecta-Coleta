@@ -1,377 +1,421 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  Alert,
   ActivityIndicator,
-} from "react-native";
-import { SafeAreaView } from "react-native-safe-area-context";
-import { supabase } from "../utils/supabaseClient";
-import { Ionicons } from "@expo/vector-icons";
-import { StatusBar } from "expo-status-bar";
-import { useFocusEffect } from "@react-navigation/native";
+  Image,
+  Alert,
+  Share
+} from 'react-native';
+import { SafeAreaView } from 'react-native-safe-area-context';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { supabase } from '../utils/supabaseClient';
+import { useFocusEffect } from '@react-navigation/native';
 
-const MenuItem = ({ icon, title, subtitle, onPress, badgeCount }) => (
-  <TouchableOpacity style={styles.menuItem} onPress={onPress}>
-    <View style={[styles.menuIconContainer, { backgroundColor: "#e6f2ff" }]}>
-      {icon}
-    </View>
-    <View style={styles.menuTextContainer}>
-      <Text style={styles.menuTitle}>{title}</Text>
-      <Text style={styles.menuSubtitle}>{subtitle}</Text>
-    </View>
-    {badgeCount > 0 && (
-      <View style={styles.badge}>
-        <Text style={styles.badgeText}>{badgeCount}</Text>
-      </View>
-    )}
-    <Ionicons name="chevron-forward" size={24} color="#ccc" />
-  </TouchableOpacity>
-);
+// --- FUNÇÕES DE FORMATAÇÃO VISUAL ---
+const formatDocument = (text) => {
+  if (!text) return 'Sem documento';
+  const cleaned = text.replace(/\D/g, '');
+  
+  if (cleaned.length <= 11) {
+    // CPF: 123.456.789-00
+    return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+  } else {
+    // CNPJ: 12.345.678/0001-99
+    return cleaned.replace(/(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, '$1.$2.$3/$4-$5');
+  }
+};
+
+const formatPhone = (text) => {
+  if (!text) return 'Telefone não informado';
+  const cleaned = text.replace(/\D/g, '');
+  
+  if (cleaned.length === 11) {
+     // Celular: (81) 9 8888-8888
+     return cleaned.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, '($1) $2 $3-$4');
+  } else if (cleaned.length === 10) {
+     // Fixo: (81) 3333-3333
+     return cleaned.replace(/^(\d{2})(\d{4})(\d{4})$/, '($1) $2-$3');
+  }
+  return text; // Retorna original se não casar com padrão
+};
 
 export default function ProfileScreen({ navigation }) {
+  const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [address, setAddress] = useState(null);
-  const [notificationCount, setNotificationCount] = useState(0);
-  const [loading, setLoading] = useState(true);
+  const [userType, setUserType] = useState(null);
 
-  // Função auxiliar para formatar CPF/CNPJ na visualização
-  const formatDocument = (doc) => {
-    if (!doc) return "---";
-    const cleanDoc = doc.replace(/\D/g, "");
-    if (cleanDoc.length <= 11) {
-      // CPF
-      return cleanDoc.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
-    } else {
-      // CNPJ
-      return cleanDoc.replace(
-        /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
-        "$1.$2.$3/$4-$5"
-      );
-    }
-  };
-
-  // Função auxiliar para formatar Telefone
-  const formatPhone = (phone) => {
-    if (!phone) return "Telefone não cadastrado";
-    const cleanPhone = phone.replace(/\D/g, "");
-    if (cleanPhone.length === 11) {
-      return cleanPhone.replace(
-        /^(\d{2})(\d{1})(\d{4})(\d{4})$/,
-        "($1) $2 $3-$4"
-      );
-    }
-    return cleanPhone;
-  };
-
-  const fetchData = async () => {
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (user) {
-      // Perfil (Agora buscando também o telefone)
-      const { data: profileData } = await supabase
-        .from("usuarios")
-        .select("nome_razao_social, cpf_cnpj, email, telefone")
-        .eq("usuario_id", user.id)
-        .single();
-      if (profileData) setProfile(profileData);
-
-      // Endereço
-      const { data: addressData } = await supabase
-        .from("enderecos")
-        .select("rua, numero, bairro")
-        .eq("usuario_id", user.id)
-        .eq("is_padrao", true)
-        .single();
-
-      // Monta o endereço completo para exibição
-      if (addressData) {
-        const numeroStr =
-          addressData.numero && addressData.numero !== "S/N"
-            ? `, ${addressData.numero}`
-            : "";
-        const bairroStr = addressData.bairro ? ` - ${addressData.bairro}` : "";
-        setAddress({
-          ...addressData,
-          formatted: `${addressData.rua}${numeroStr}${bairroStr}`,
-        });
-      } else {
-        setAddress(null);
-      }
-
-      // Notificações
-      const { count } = await supabase
-        .from("notificacoes")
-        .select("*", { count: "exact", head: true })
-        .eq("usuario_id", user.id)
-        .eq("lida", false);
-      setNotificationCount(count || 0);
-    }
-    setLoading(false);
-  };
-
+  // --- ATUALIZAÇÃO AUTOMÁTICA AO VOLTAR PARA A TELA ---
   useFocusEffect(
     useCallback(() => {
-      fetchData();
+      fetchUserData();
     }, [])
   );
 
+  const fetchUserData = async () => {
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) return;
+
+      // 1. Busca Perfil (Incluindo a foto_url)
+      const { data: profileData, error: profileError } = await supabase
+        .from('usuarios')
+        .select('*')
+        .eq('usuario_id', user.id)
+        .single();
+
+      if (profileError) throw profileError;
+      setProfile(profileData);
+      setUserType(profileData.tipo_usuario);
+
+      // 2. Busca Endereço
+      const { data: addressData, error: addressError } = await supabase
+        .from('enderecos')
+        .select('*')
+        .eq('usuario_id', user.id)
+        .eq('is_padrao', true)
+        .maybeSingle();
+
+      if (!addressError) {
+        setAddress(addressData);
+      }
+
+    } catch (error) {
+      console.log('Erro ao carregar perfil:', error);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   const handleLogout = async () => {
-    Alert.alert("Sair da Conta", "Você tem certeza que quer sair?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sim, Sair",
-        style: "destructive",
+    Alert.alert('Sair', 'Deseja realmente sair da sua conta?', [
+      { text: 'Cancelar', style: 'cancel' },
+      { 
+        text: 'Sair', 
+        style: 'destructive',
         onPress: async () => {
-          await supabase.auth.signOut();
-          navigation.reset({ index: 0, routes: [{ name: "Welcome" }] });
-        },
-      },
+            await supabase.auth.signOut();
+            // O App.js vai detectar e jogar para o Welcome
+        }
+      }
     ]);
   };
 
-  if (loading && !profile) {
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: 'Conecta Coleta - O melhor app de gestão de resíduos de Recife!',
+      });
+    } catch (error) {
+      console.log(error.message);
+    }
+  };
+
+  if (loading) {
     return (
-      <View
-        style={{
-          flex: 1,
-          justifyContent: "center",
-          alignItems: "center",
-          backgroundColor: "#F0F2F5",
-        }}
-      >
+      <View style={styles.loadingContainer}>
         <ActivityIndicator size="large" color="#007BFF" />
       </View>
     );
   }
 
+  // Formatação de endereço
+  const fullAddress = address 
+    ? `${address.rua}, ${address.numero} - ${address.bairro}`
+    : 'Endereço não cadastrado';
+
   return (
-    <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
-
-      <View style={styles.header}>
-        <View style={styles.headerIcon}>
-          <Ionicons name="person" size={24} color="#007BFF" />
-        </View>
-        <View>
-          <Text style={styles.headerName}>
-            {profile?.nome_razao_social || "Usuário"}
-          </Text>
-          {/* CPF FORMATADO AQUI */}
-          <Text style={styles.headerIdentifier}>
-            {formatDocument(profile?.cpf_cnpj)}
-          </Text>
-        </View>
-      </View>
-
-      <ScrollView
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
-        showsVerticalScrollIndicator={false}
-      >
-        <View style={styles.mainContent}>
-          <View style={styles.contactCard}>
-            <Text style={styles.cardTitle}>Informações de Contato</Text>
-
-            <View style={styles.infoRow}>
-              <Ionicons name="mail-outline" size={20} color="#666" />
-              <Text style={styles.infoText}>{profile?.email}</Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Ionicons name="call-outline" size={20} color="#666" />
-              {/* TELEFONE REAL DO BANCO AQUI */}
-              <Text style={styles.infoText}>
-                {formatPhone(profile?.telefone)}
-              </Text>
-            </View>
-
-            <View style={styles.infoRow}>
-              <Ionicons name="location-outline" size={20} color="#666" />
-              <Text style={styles.infoText}>
-                {address?.formatted || "Endereço não cadastrado"}
-              </Text>
-            </View>
-
-            <TouchableOpacity
-              style={styles.editButton}
-              onPress={() => navigation.navigate("EditProfile")}
-            >
-              <Text style={styles.editButtonText}>Editar Informações</Text>
-            </TouchableOpacity>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <ScrollView contentContainerStyle={styles.scrollContent} showsVerticalScrollIndicator={false}>
+        
+        {/* --- HEADER AZUL --- */}
+        <View style={styles.header}>
+          <View style={styles.headerTopRow}>
+             <View /> 
+             {/* Botão de Logout no topo */}
+             <TouchableOpacity onPress={handleLogout}>
+                <Ionicons name="log-out-outline" size={24} color="rgba(255,255,255,0.8)" />
+             </TouchableOpacity>
           </View>
 
-          <Text style={styles.sectionTitle}>Minha Conta</Text>
+          <View style={styles.profileHeaderContent}>
+            {/* FOTO DO PERFIL */}
+            <View style={styles.avatarContainer}>
+              {profile?.foto_url ? (
+                <Image 
+                  source={{ uri: profile.foto_url }} 
+                  style={styles.avatarImage} 
+                  resizeMode="cover"
+                />
+              ) : (
+                <View style={styles.avatarPlaceholder}>
+                  <Ionicons name="person" size={40} color="#007BFF" />
+                </View>
+              )}
+            </View>
 
-          <MenuItem
-            icon={<Ionicons name="time-outline" size={20} color="#007BFF" />}
-            title="Histórico"
-            subtitle="Seus pedidos e solicitações"
-            onPress={() => navigation.navigate("History")}
-          />
+            <View style={styles.profileTexts}>
+              <Text style={styles.userName} numberOfLines={1}>
+                {profile?.nome_razao_social || 'Usuário'}
+              </Text>
+              
+              {/* CPF/CNPJ FORMATADO AQUI */}
+              <Text style={styles.userId}>
+                {formatDocument(profile?.cpf_cnpj)}
+              </Text>
+            </View>
+          </View>
+        </View>
 
-          <MenuItem
-            icon={
-              <Ionicons
-                name="notifications-outline"
-                size={20}
-                color="#007BFF"
-              />
-            }
-            title="Notificações"
-            subtitle={
-              notificationCount > 0
-                ? `${notificationCount} não lidas`
-                : "Nenhuma nova notificação"
-            }
-            onPress={() => navigation.navigate("Notifications")}
-            badgeCount={notificationCount}
-          />
+        {/* --- CARTÃO DE INFORMAÇÕES --- */}
+        <View style={styles.infoCard}>
+          <Text style={styles.infoTitle}>Informações de Contato</Text>
+          
+          <View style={styles.infoRow}>
+            <Ionicons name="mail-outline" size={20} color="#666" style={styles.infoIcon} />
+            <Text style={styles.infoText} numberOfLines={1}>{profile?.email}</Text>
+          </View>
 
-          <MenuItem
-            icon={
-              <Ionicons name="settings-outline" size={20} color="#007BFF" />
-            }
-            title="Configurações"
-            subtitle="Preferências do aplicativo"
-            onPress={() => navigation.navigate("Settings")}
-          />
+          <View style={styles.infoRow}>
+            <Ionicons name="call-outline" size={20} color="#666" style={styles.infoIcon} />
+            {/* TELEFONE FORMATADO AQUI */}
+            <Text style={styles.infoText}>
+              {formatPhone(profile?.telefone)}
+            </Text>
+          </View>
 
-          <Text style={styles.sectionTitle}>Ajuda e Suporte</Text>
-          <MenuItem
-            icon={
-              <Ionicons name="help-circle-outline" size={20} color="#007BFF" />
-            }
-            title="Central de Ajuda"
-            subtitle="Perguntas frequentes"
-            onPress={() => navigation.navigate("FAQ")}
-          />
+          <View style={styles.infoRow}>
+            <Ionicons name="location-outline" size={20} color="#666" style={styles.infoIcon} />
+            <Text style={styles.infoText} numberOfLines={2}>{fullAddress}</Text>
+          </View>
 
-          <TouchableOpacity style={styles.logoutButton} onPress={handleLogout}>
-            <Ionicons name="log-out-outline" size={24} color="#E74C3C" />
-            <Text style={styles.logoutButtonText}>Sair da Conta</Text>
+          <TouchableOpacity 
+            style={styles.editButton} 
+            onPress={() => navigation.navigate('EditProfile')}
+          >
+            <Text style={styles.editButtonText}>Editar Informações</Text>
           </TouchableOpacity>
         </View>
 
-        <Text style={styles.versionText}>Conecta Coleta v1.1.0</Text>
+        {/* --- MENUS --- */}
+        <Text style={styles.sectionTitle}>MINHA CONTA</Text>
+
+        <MenuOption 
+          icon="time-outline" 
+          title="Histórico" 
+          subtitle="Seus pedidos e solicitações" 
+          color="#007BFF"
+          onPress={() => navigation.navigate('History')}
+        />
+
+        <MenuOption 
+          icon="notifications-outline" 
+          title="Notificações" 
+          subtitle="Alertas e avisos" 
+          color="#007BFF"
+          onPress={() => navigation.navigate('Notifications')}
+        />
+
+        <MenuOption 
+          icon="settings-outline" 
+          title="Configurações" 
+          subtitle="Preferências do aplicativo" 
+          color="#007BFF"
+          onPress={() => navigation.navigate('Settings')}
+        />
+
+        <Text style={styles.sectionTitle}>AJUDA E SUPORTE</Text>
+
+        <MenuOption 
+          icon="help-circle-outline" 
+          title="Central de Ajuda" 
+          subtitle="Perguntas frequentes" 
+          color="#007BFF"
+          onPress={() => navigation.navigate('FAQ')}
+        />
+        
+        <MenuOption 
+          icon="share-social-outline" 
+          title="Compartilhar App" 
+          subtitle="Convide amigos e vizinhos" 
+          color="#007BFF"
+          onPress={handleShare}
+        />
+
+        <View style={{ height: 30 }} />
       </ScrollView>
     </SafeAreaView>
   );
 }
 
+// Componente de Opção de Menu
+const MenuOption = ({ icon, title, subtitle, color, onPress }) => (
+  <TouchableOpacity style={styles.menuOption} onPress={onPress}>
+    <View style={[styles.iconCircle, { backgroundColor: '#E3F2FD' }]}>
+      <Ionicons name={icon} size={22} color={color} />
+    </View>
+    <View style={styles.menuTextContainer}>
+      <Text style={styles.menuTitle}>{title}</Text>
+      <Text style={styles.menuSubtitle}>{subtitle}</Text>
+    </View>
+    <Ionicons name="chevron-forward" size={20} color="#CCC" />
+  </TouchableOpacity>
+);
+
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: "#007BFF" },
+  container: { flex: 1, backgroundColor: '#F5F5F5' },
+  loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
+  
+  scrollContent: { paddingBottom: 20 },
+
+  // Header Azul
   header: {
+    backgroundColor: '#007BFF',
     paddingHorizontal: 20,
-    paddingBottom: 30,
-    paddingTop: 20,
-    flexDirection: "row",
-    alignItems: "center",
-    backgroundColor: "#007BFF",
+    paddingBottom: 40, // Espaço extra para o card sobrepor
+    paddingTop: 10,
   },
-  headerIcon: {
-    width: 44,
-    height: 44,
-    borderRadius: 22,
-    backgroundColor: "#fff",
-    justifyContent: "center",
-    alignItems: "center",
+  headerTopRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginBottom: 15,
+  },
+  profileHeaderContent: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  avatarContainer: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: 'white',
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 15,
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.3)'
   },
-  headerName: { fontSize: 20, fontWeight: "bold", color: "#fff" },
-  headerIdentifier: { fontSize: 14, color: "#fff", opacity: 0.9 },
-  scrollContainer: { flex: 1, backgroundColor: "#F0F2F5" },
-  scrollContent: { padding: 20, flexGrow: 1 },
-  mainContent: { flex: 1 },
-  contactCard: {
-    backgroundColor: "#fff",
+  avatarImage: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+  },
+  avatarPlaceholder: {
+    width: 66,
+    height: 66,
+    borderRadius: 33,
+    backgroundColor: '#FFF',
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  profileTexts: {
+    flex: 1,
+  },
+  userName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: 'white',
+    marginBottom: 2,
+  },
+  userId: {
+    fontSize: 14,
+    color: 'rgba(255,255,255,0.8)',
+  },
+
+  // Card de Informações (Sobreposto)
+  infoCard: {
+    backgroundColor: 'white',
+    marginHorizontal: 20,
+    marginTop: -25, // Efeito de sobreposição
     borderRadius: 15,
     padding: 20,
-    elevation: 3,
-    shadowColor: "#000",
+    elevation: 4,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
-    shadowRadius: 5,
-    marginBottom: 30,
+    shadowRadius: 4,
+    marginBottom: 25,
   },
-  cardTitle: {
-    fontSize: 18,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 20,
+  infoTitle: {
+    fontSize: 16,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 15,
   },
-  infoRow: { flexDirection: "row", alignItems: "center", marginBottom: 15 },
-  infoText: { fontSize: 15, color: "#333", marginLeft: 15, flex: 1 },
+  infoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+  },
+  infoIcon: {
+    marginRight: 12,
+    width: 20, 
+  },
+  infoText: {
+    fontSize: 14,
+    color: '#555',
+    flex: 1,
+  },
   editButton: {
-    backgroundColor: "#e6f2ff",
-    borderRadius: 10,
+    backgroundColor: '#E3F2FD',
+    borderRadius: 8,
     paddingVertical: 12,
-    alignItems: "center",
+    alignItems: 'center',
     marginTop: 10,
   },
-  editButtonText: { color: "#007BFF", fontSize: 15, fontWeight: "bold" },
-  sectionTitle: {
+  editButtonText: {
+    color: '#007BFF',
+    fontWeight: 'bold',
     fontSize: 14,
-    fontWeight: "bold",
-    color: "#666",
-    textTransform: "uppercase",
-    marginBottom: 10,
-    marginLeft: 10,
   },
-  menuItem: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
-    borderRadius: 15,
-    padding: 15,
-    alignItems: "center",
+
+  // Menus
+  sectionTitle: {
+    fontSize: 13,
+    fontWeight: 'bold',
+    color: '#888',
+    marginLeft: 20,
     marginBottom: 10,
-    elevation: 2,
+    marginTop: 5,
   },
-  menuIconContainer: {
+  menuOption: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'white',
+    paddingVertical: 15,
+    paddingHorizontal: 20,
+    marginBottom: 12,
+    marginHorizontal: 20,
+    borderRadius: 12,
+    elevation: 1,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 1 },
+    shadowOpacity: 0.05,
+    shadowRadius: 2,
+  },
+  iconCircle: {
     width: 40,
     height: 40,
     borderRadius: 20,
-    justifyContent: "center",
-    alignItems: "center",
+    justifyContent: 'center',
+    alignItems: 'center',
     marginRight: 15,
   },
-  menuTextContainer: { flex: 1 },
-  menuTitle: { fontSize: 16, fontWeight: "bold", color: "#333" },
-  menuSubtitle: { fontSize: 14, color: "#666" },
-  badge: {
-    backgroundColor: "#E74C3C",
-    borderRadius: 10,
-    width: 20,
-    height: 20,
-    justifyContent: "center",
-    alignItems: "center",
-    marginRight: 10,
-  },
-  badgeText: { color: "#fff", fontSize: 12, fontWeight: "bold" },
-  logoutButton: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
-    borderRadius: 15,
-    padding: 18,
-    alignItems: "center",
-    marginTop: 20,
-    borderWidth: 1,
-    borderColor: "#E74C3C",
-  },
-  logoutButtonText: {
+  menuTextContainer: {
     flex: 1,
-    fontSize: 16,
-    color: "#E74C3C",
-    marginLeft: 15,
-    fontWeight: "bold",
   },
-  versionText: {
-    textAlign: "center",
-    color: "#999",
-    marginTop: 20,
-    paddingBottom: 10,
+  menuTitle: {
+    fontSize: 16,
+    fontWeight: '600',
+    color: '#333',
+  },
+  menuSubtitle: {
+    fontSize: 12,
+    color: '#888',
+    marginTop: 2,
   },
 });

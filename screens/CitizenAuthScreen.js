@@ -7,6 +7,8 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
+  KeyboardAvoidingView, // <--- Importado
+  Platform // <--- Importado
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -38,17 +40,23 @@ export default function CitizenAuthScreen({ navigation, route }) {
         </Text>
       </View>
 
-      <ScrollView
+      {/* WRAPPER KEYBOARD AVOIDING VIEW ADICIONADO AQUI */}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
-        contentContainerStyle={styles.container}
-        showsVerticalScrollIndicator={false}
       >
-        {isRegisterMode ? (
-          <RegisterForm navigation={navigation} />
-        ) : (
-          <LoginForm navigation={navigation} />
-        )}
-      </ScrollView>
+        <ScrollView
+          style={{ flex: 1 }}
+          contentContainerStyle={styles.container}
+          showsVerticalScrollIndicator={false}
+        >
+          {isRegisterMode ? (
+            <RegisterForm navigation={navigation} />
+          ) : (
+            <LoginForm navigation={navigation} />
+          )}
+        </ScrollView>
+      </KeyboardAvoidingView>
     </SafeAreaView>
   );
 }

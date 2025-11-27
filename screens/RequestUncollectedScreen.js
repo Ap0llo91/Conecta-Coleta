@@ -1,5 +1,17 @@
 import React, { useState } from 'react';
-import { View, Text, StyleSheet, TextInput, TouchableOpacity, ScrollView, Modal, ActivityIndicator, Alert } from 'react-native';
+import { 
+  View, 
+  Text, 
+  StyleSheet, 
+  TextInput, 
+  TouchableOpacity, 
+  ScrollView, 
+  Modal, 
+  ActivityIndicator, 
+  Alert,
+  KeyboardAvoidingView, // <--- Importado
+  Platform // <--- Importado
+} from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
@@ -17,7 +29,7 @@ const RequestUncollectedScreen = ({ navigation }) => {
   // Estado para o Modal de Tipo de Lixo
   const [modalVisible, setModalVisible] = useState(false);
 
-  // Opções do Dropdown (Baseado no seu Figma)
+  // Opções do Dropdown
   const tiposDeLixo = [
     "Lixo doméstico",
     "Lixo reciclável",
@@ -65,74 +77,79 @@ const RequestUncollectedScreen = ({ navigation }) => {
         <Text style={styles.headerSubtitle}>Reporte lixo que não foi coletado</Text>
       </View>
 
-      <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        
-        {/* Campo de Localização com GPS */}
-        <Text style={styles.label}>Localização</Text>
-        <View style={styles.addressContainer}>
-          <TextInput 
-            style={styles.inputAddress} 
-            placeholder="Rua, número" 
-            value={endereco} 
-            onChangeText={setEndereco} 
-          />
-          <TouchableOpacity onPress={handleGetLocation} disabled={loadingLocation}>
-            {loadingLocation ? (
-              <ActivityIndicator size="small" color="#D92D20" />
-            ) : (
-              <Ionicons name="location-outline" size={24} color="#D92D20" />
-            )}
+      {/* WRAPPER KEYBOARD AVOIDING VIEW ADICIONADO AQUI */}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
+      >
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          
+          {/* Campo de Localização com GPS */}
+          <Text style={styles.label}>Localização</Text>
+          <View style={styles.addressContainer}>
+            <TextInput 
+              style={styles.inputAddress} 
+              placeholder="Rua, número" 
+              value={endereco} 
+              onChangeText={setEndereco} 
+            />
+            <TouchableOpacity onPress={handleGetLocation} disabled={loadingLocation}>
+              {loadingLocation ? (
+                <ActivityIndicator size="small" color="#D92D20" />
+              ) : (
+                <Ionicons name="location-outline" size={24} color="#D92D20" />
+              )}
+            </TouchableOpacity>
+          </View>
+
+          {/* Dropdown Tipo de Lixo */}
+          <Text style={styles.label}>Tipo de Lixo</Text>
+          <TouchableOpacity style={styles.dropdown} onPress={() => setModalVisible(true)}>
+            <Text style={tipoLixo ? styles.inputText : styles.placeholderText}>
+              {tipoLixo || "Selecione o tipo"}
+            </Text>
+            <Ionicons name="chevron-down" size={24} color="#666" />
           </TouchableOpacity>
-        </View>
 
-        {/* Dropdown Tipo de Lixo */}
-        <Text style={styles.label}>Tipo de Lixo</Text>
-        <TouchableOpacity style={styles.dropdown} onPress={() => setModalVisible(true)}>
-          <Text style={tipoLixo ? styles.inputText : styles.placeholderText}>
-            {tipoLixo || "Selecione o tipo"}
-          </Text>
-          <Ionicons name="chevron-down" size={24} color="#666" />
-        </TouchableOpacity>
+          <Text style={styles.label}>Data da Coleta Prevista</Text>
+          <TextInput 
+            style={styles.input} 
+            placeholder="dd/mm/aaaa" 
+            value={dataColeta} 
+            onChangeText={setDataColeta} 
+          />
 
-        <Text style={styles.label}>Data da Coleta Prevista</Text>
-        <TextInput 
-          style={styles.input} 
-          placeholder="dd/mm/aaaa" 
-          value={dataColeta} 
-          onChangeText={setDataColeta} 
-        />
+          <Text style={styles.label}>Horário que foi exposto</Text>
+          <TextInput 
+            style={styles.input} 
+            placeholder="--:--" 
+            value={horario} 
+            onChangeText={setHorario} 
+          />
 
-        <Text style={styles.label}>Horário que foi exposto</Text>
-        <TextInput 
-          style={styles.input} 
-          placeholder="--:--" 
-          value={horario} 
-          onChangeText={setHorario} 
-        />
+          <Text style={styles.label}>Descrição da Situação</Text>
+          <TextInput 
+            style={[styles.input, styles.textArea]} 
+            placeholder="Descreva o problema: quantidade de lixo, há quanto tempo está exposto, etc." 
+            multiline 
+            numberOfLines={4} 
+            value={descricao} 
+            onChangeText={setDescricao} 
+          />
 
-        <Text style={styles.label}>Descrição da Situação</Text>
-        <TextInput 
-          style={[styles.input, styles.textArea]} 
-          placeholder="Descreva o problema: quantidade de lixo, há quanto tempo está exposto, etc." 
-          multiline 
-          numberOfLines={4}
-          value={descricao} 
-          onChangeText={setDescricao} 
-        />
+          {/* Placeholder de Foto */}
+          <Text style={styles.label}>Foto do Local (opcional)</Text>
+          <TouchableOpacity style={styles.photoBox} onPress={() => console.log("Abrir Câmera")}>
+             <Text style={styles.photoText}>Clique para adicionar foto</Text>
+          </TouchableOpacity>
 
-        {/* Placeholder de Foto */}
-        <Text style={styles.label}>Foto do Local (opcional)</Text>
-        <TouchableOpacity style={styles.photoBox} onPress={() => console.log("Abrir Câmera")}>
-           {/* Pode-se adicionar lógica de câmera aqui no futuro */}
-           <Text style={styles.photoText}>Clique para adicionar foto</Text>
-        </TouchableOpacity>
+          <TouchableOpacity style={styles.submitButton} onPress={() => console.log('Enviando solicitação...')}>
+            <Text style={styles.submitButtonText}>Enviar Solicitação</Text>
+          </TouchableOpacity>
 
-        <TouchableOpacity style={styles.submitButton} onPress={() => console.log('Enviando solicitação...')}>
-          <Text style={styles.submitButtonText}>Enviar Solicitação</Text>
-        </TouchableOpacity>
-
-        <View style={{ height: 40 }} /> 
-      </ScrollView>
+          <View style={{ height: 40 }} /> 
+        </ScrollView>
+      </KeyboardAvoidingView>
 
       {/* Modal de Seleção */}
       <Modal visible={modalVisible} animationType="slide" transparent={true}>
@@ -164,7 +181,7 @@ const RequestUncollectedScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9F9F9' },
   header: {
-    backgroundColor: '#D92D20', // Vermelho igual ao Figma
+    backgroundColor: '#D92D20', // Vermelho
     paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 20,

@@ -26,6 +26,17 @@ const ECOPONTOS = [
   { title: "Ecoponto Ibura", latitude: -8.13, longitude: -34.94 },
 ];
 
+// --- LISTA DE DICAS (7 DICAS) ---
+const DICAS = [
+  "Lave as embalagens recicláveis antes de descartar. Isso facilita o processo de reciclagem e evita mau cheiro!",
+  "Amasse as latas de alumínio e garrafas PET para ocupar menos espaço na lixeira e facilitar o transporte.",
+  "Separe o óleo de cozinha usado em uma garrafa PET e leve a um ponto de coleta. Nunca jogue na pia!",
+  "Papéis engordurados (como caixas de pizza) não são recicláveis. Descarte no lixo comum (orgânico).",
+  "Pilhas e baterias contêm metais pesados. Descarte apenas em pontos de coleta específicos, nunca no lixo comum.",
+  "Vidros quebrados devem ser embrulhados em jornal ou caixa de leite para proteger os coletores de acidentes.",
+  "Remova as tampas das garrafas antes de amassar, mas descarte-as junto para reciclagem também!"
+];
+
 // --- Componentes de Cards ---
 
 const EtaCard = ({ minutes, onPress }) => (
@@ -41,7 +52,6 @@ const EtaCard = ({ minutes, onPress }) => (
     
     <Text style={styles.etaTitle}>Previsão de Chegada</Text>
     
-    {/* Se for menos de 1 minuto, mostra CHEGANDO */}
     {minutes <= 1 ? (
         <View style={{ alignItems: 'center', marginVertical: 10 }}>
             <Text style={styles.etaTimeSmall}>CHEGANDO</Text>
@@ -101,23 +111,37 @@ const InfoCard = ({
   </TouchableOpacity>
 );
 
-const DicaCard = () => (
-  <View style={styles.dicaCard}>
-    <Ionicons
-      name="bulb-outline"
-      size={24}
-      color="#2E8B57"
-      style={styles.dicaIcon}
-    />
-    <View style={styles.infoTextContainer}>
-      <Text style={styles.dicaTitle}>Dica do Dia</Text>
-      <Text style={styles.dicaSubtitle}>
-        Lave as embalagens recicláveis antes de descartar. Isso facilita o
-        processo de reciclagem!
-      </Text>
+const DicaCard = () => {
+  // Lógica para selecionar a dica baseada no dia do ano
+  const getDailyTip = () => {
+    const today = new Date();
+    // Um jeito simples de pegar um índice único para cada dia:
+    // Soma dia + mês + ano (para variar sempre)
+    // Ou usa getDay() para repetir semanalmente (0-6)
+    const dayIndex = today.getDay(); // 0 (Domingo) a 6 (Sábado)
+    
+    return DICAS[dayIndex];
+  };
+
+  const dicaDoDia = getDailyTip();
+
+  return (
+    <View style={styles.dicaCard}>
+      <Ionicons
+        name="bulb-outline"
+        size={24}
+        color="#2E8B57"
+        style={styles.dicaIcon}
+      />
+      <View style={styles.infoTextContainer}>
+        <Text style={styles.dicaTitle}>Dica do Dia</Text>
+        <Text style={styles.dicaSubtitle}>
+          {dicaDoDia}
+        </Text>
+      </View>
     </View>
-  </View>
-);
+  );
+};
 
 export default function HomeScreen({ navigation }) {
   const [userName, setUserName] = useState("Visitante");
@@ -127,13 +151,12 @@ export default function HomeScreen({ navigation }) {
   const [nearestEcopoint, setNearestEcopoint] = useState(null);
   const [loadingLocation, setLoadingLocation] = useState(true);
   const [userAddress, setUserAddress] = useState("Carregando localização...");
-  const [etaMinutes, setEtaMinutes] = useState(12); // Começa com um valor padrão, depois atualiza
+  const [etaMinutes, setEtaMinutes] = useState(12);
 
   const handleOpenMap = () => {
     navigation.navigate("MapScreen");
   };
 
-  // Função Matemática de Distância (Haversine)
   const calculateDistance = (lat1, lon1, lat2, lon2) => {
     const R = 6371; 
     const dLat = (lat2 - lat1) * (Math.PI / 180);
@@ -148,27 +171,18 @@ export default function HomeScreen({ navigation }) {
     return R * c;
   };
 
-  // Calcula ETA baseado em uma posição fictícia do caminhão (para simulação dinâmica)
   const calculateEta = (userLat, userLon) => {
-      // Simulamos que o caminhão está a uns 3km de distância (ex: perto da Jaqueira se vc estiver na Torre)
-      // Para fins de demo, criamos um offset fixo da posição do usuário
       const truckLat = userLat + 0.02; 
       const truckLon = userLon + 0.02;
-      
       const distKm = calculateDistance(userLat, userLon, truckLat, truckLon);
-      
-      // Velocidade média de coleta: 15 km/h (devagar por causa das paradas)
       const speedKmH = 15; 
       const timeHours = distKm / speedKmH;
       const timeMinutes = Math.round(timeHours * 60);
-      
-      // Garante que nunca seja 0 ou negativo se estiver muito perto na simulação
       return timeMinutes < 2 ? 2 : timeMinutes; 
   };
 
   useEffect(() => {
     const initData = async () => {
-      // 1. Buscar Usuário do Supabase
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -182,7 +196,6 @@ export default function HomeScreen({ navigation }) {
       }
       setLoading(false);
 
-      // 2. Buscar Localização
       try {
         let { status } = await Location.requestForegroundPermissionsAsync();
         if (status !== "granted") {
@@ -193,11 +206,9 @@ export default function HomeScreen({ navigation }) {
 
         let location = await Location.getCurrentPositionAsync({});
         
-        // ATUALIZA O ETA DINAMICAMENTE
         const realEta = calculateEta(location.coords.latitude, location.coords.longitude);
         setEtaMinutes(realEta);
 
-        // Pega o endereço legível
         let geocode = await Location.reverseGeocodeAsync(location.coords);
         if (geocode.length > 0) {
           setUserAddress(
@@ -207,7 +218,6 @@ export default function HomeScreen({ navigation }) {
           );
         }
 
-        // Calcula o ecoponto mais próximo
         let minDistance = Infinity;
         let closest = null;
 
@@ -253,7 +263,6 @@ export default function HomeScreen({ navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        {/* Cabeçalho */}
         <View style={styles.header}>
           <Text style={styles.headerTitle}>Olá, {userName}! 👋</Text>
           <View
@@ -264,10 +273,8 @@ export default function HomeScreen({ navigation }) {
           </View>
         </View>
 
-        {/* Card Principal de ETA (Passamos os minutos calculados) */}
         <EtaCard minutes={etaMinutes} onPress={handleOpenMap} />
 
-        {/* Seção de Informações Rápidas */}
         <Text style={styles.sectionTitle}>Informações Rápidas</Text>
 
         <InfoCard
@@ -278,7 +285,6 @@ export default function HomeScreen({ navigation }) {
           onPress={() => navigation.navigate("HowItWorks")}
         />
 
-        {/* Card Inteligente de Ecoponto */}
         <InfoCard
           icon={<Ionicons name="location-sharp" size={20} color="#8A2BE2" />}
           iconBgColor="#f0e6ff"
@@ -294,7 +300,6 @@ export default function HomeScreen({ navigation }) {
           onPress={() => navigation.navigate("Ecopoints")}
         />
 
-        {/* Card de Dica */}
         <DicaCard />
       </ScrollView>
     </SafeAreaView>
@@ -321,14 +326,14 @@ const styles = StyleSheet.create({
     marginBottom: 20,
   },
   headerTitle: {
-    fontSize: 24, // Levemente menor para não quebrar em nomes longos
+    fontSize: 24,
     fontWeight: "bold",
     color: "#333",
   },
   locationText: {
     fontSize: 14,
     color: "#666",
-    flex: 1, // Garante que o texto quebre se for longo
+    flex: 1,
   },
   
   // Card Azul
@@ -366,7 +371,7 @@ const styles = StyleSheet.create({
     fontWeight: "bold",
     lineHeight: 120,
   },
-  etaTimeSmall: { // Estilo para quando estiver "CHEGANDO"
+  etaTimeSmall: { 
     color: "#fff",
     fontSize: 48,
     fontWeight: "bold",
