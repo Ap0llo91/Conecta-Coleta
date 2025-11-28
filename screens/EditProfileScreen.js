@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useCallback } from 'react';
 import {
   View,
   Text,
@@ -9,13 +9,14 @@ import {
   Alert,
   ActivityIndicator,
   Image,
-  KeyboardAvoidingView, 
-  Platform 
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import { supabase } from '../utils/supabaseClient';
-import * as ImagePicker from 'expo-image-picker'; // Restaurado
+import * as ImagePicker from 'expo-image-picker';
+import { useFocusEffect } from '@react-navigation/native';
 
 export default function EditProfileScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
@@ -26,17 +27,16 @@ export default function EditProfileScreen({ navigation }) {
   const [telefone, setTelefone] = useState('');
   const [email, setEmail] = useState('');
   const [cpf, setCpf] = useState('');
-  
-  // Estado da Imagem (URI local da foto tirada/escolhida)
   const [imageUri, setImageUri] = useState(null);
 
   // Estados do Endereço
   const [rua, setRua] = useState('');
   const [numero, setNumero] = useState('');
   const [bairro, setBairro] = useState('');
+  const [cep, setCep] = useState('');
   const [addressId, setAddressId] = useState(null);
 
-  // --- MÁSCARA DE TELEFONE ---
+  // --- MÁSCARAS ---
   const applyPhoneMask = (text) => {
     let v = text.replace(/\D/g, "");
     v = v.substring(0, 11);
@@ -56,19 +56,39 @@ export default function EditProfileScreen({ navigation }) {
     setTelefone(applyPhoneMask(text));
   };
 
-  useEffect(() => {
-    fetchProfileData();
-  }, []);
+  const applyCepMask = (text) => {
+    let v = text.replace(/\D/g, "");
+    v = v.substring(0, 8);
+    if (v.length > 5) {
+      v = v.replace(/^(\d{5})(\d)/, "$1-$2");
+    }
+    return v;
+  };
+
+  const handleCepChange = (text) => {
+    setCep(applyCepMask(text));
+  };
+
+  // Garante que carrega ao entrar na tela
+  useFocusEffect(
+    useCallback(() => {
+      fetchProfileData();
+    }, [])
+  );
 
   const fetchProfileData = async () => {
+    setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
-      if (!user) return;
+      if (!user) {
+          setLoading(false);
+          return;
+      }
 
-      // 1. Busca dados do usuário
+      // 1. Busca Dados Pessoais
       const { data: profile, error: profileError } = await supabase
         .from('usuarios')
-        .select('nome_razao_social, telefone, email, cpf_cnpj, foto_url') 
+        .select('*') 
         .eq('usuario_id', user.id)
         .single();
 
@@ -77,89 +97,130 @@ export default function EditProfileScreen({ navigation }) {
         if (profile.telefone) setTelefone(applyPhoneMask(profile.telefone));
         setEmail(profile.email || '');
         setCpf(profile.cpf_cnpj || '');
-        
-        // Se tiver foto salva, carrega
-        if (profile.foto_url) {
-            setImageUri(profile.foto_url);
-        }
+        if (profile.foto_url) setImageUri(profile.foto_url);
+      } else if (profileError) {
+          console.log("Erro ao buscar usuario:", profileError.message);
       }
 
-      // 2. Busca endereço
-      const { data: address } = await supabase
+      // 2. Busca o Endereço
+      let addressData = null;
+
+      const { data: defaultAddr } = await supabase
         .from('enderecos')
         .select('*')
         .eq('usuario_id', user.id)
         .eq('is_padrao', true)
+        .limit(1)
         .maybeSingle();
 
-      if (address) {
-        const ruaCompleta = address.rua || '';
-        setRua(ruaCompleta.split(',')[0] || ruaCompleta);
-        setNumero(address.numero || '');
-        setBairro(address.bairro || '');
-        setAddressId(address.id);
+      if (defaultAddr) {
+        addressData = defaultAddr;
+      } else {
+        const { data: latestAddr } = await supabase
+            .from('enderecos')
+            .select('*')
+            .eq('usuario_id', user.id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+        if (latestAddr) addressData = latestAddr;
+      }
+
+      if (addressData) {
+        console.log("Endereço carregado para edição (ID):", addressData.id);
+        setAddressId(addressData.id);
+        
+        // Lógica de Preenchimento CORRIGIDA
+        if (addressData.numero || addressData.bairro) {
+            // Caso já esteja salvo nas colunas corretas (ideal)
+            setRua(addressData.rua || '');
+            setNumero(addressData.numero ? String(addressData.numero) : '');
+            setBairro(addressData.bairro || '');
+        } else {
+            // Caso esteja salvo tudo junto na coluna 'rua' (legado do cadastro)
+            // Formato esperado: "Rua X, 123, Bairro Y"
+            let r = addressData.rua || '';
+            let n = '';
+            let b = '';
+
+            if (r.includes(',')) {
+                const parts = r.split(',');
+                
+                // Se tiver 3 partes: Rua, Numero, Bairro
+                if (parts.length >= 3) {
+                    r = parts[0].trim();
+                    n = parts[1].trim();
+                    // Junta o resto caso o bairro tenha vírgulas
+                    b = parts.slice(2).join(',').trim();
+                } 
+                // Se tiver 2 partes: Rua, Numero (e talvez bairro com traço)
+                else if (parts.length === 2) {
+                    r = parts[0].trim();
+                    const part2 = parts[1].trim();
+                    
+                    if (part2.includes('-')) {
+                        // Formato antigo com traço: "123 - Centro"
+                        const subParts = part2.split('-');
+                        n = subParts[0].trim();
+                        b = subParts.slice(1).join('-').trim();
+                    } else {
+                        n = part2;
+                    }
+                }
+            }
+            
+            setRua(r);
+            setNumero(n);
+            setBairro(b);
+        }
+        setCep(addressData.cep || '');
       }
 
     } catch (error) {
-      console.log('Erro geral:', error);
+      console.log('Erro geral ao carregar edição:', error);
     } finally {
       setLoading(false);
     }
   };
 
-  // --- FUNÇÕES DE CÂMERA E GALERIA ---
-  
+  // --- FOTO ---
   const pickFromGallery = async () => {
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permissão necessária', 'Precisamos de acesso à galeria para escolher uma foto.');
-      return;
-    }
-    
+    if (status !== 'granted') return;
     let result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
-      aspect: [1, 1], // Foto quadrada perfeita para perfil
-      quality: 0.5,   // Qualidade média para não pesar no banco
+      aspect: [1, 1],
+      quality: 0.5,
     });
-
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
-    }
+    if (!result.canceled) setImageUri(result.assets[0].uri);
   };
 
   const pickFromCamera = async () => {
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
-    if (status !== 'granted') {
-      Alert.alert('Permissão necessária', 'Precisamos de acesso à câmera para tirar uma foto.');
-      return;
-    }
-
+    if (status !== 'granted') return;
     let result = await ImagePicker.launchCameraAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
       allowsEditing: true,
       aspect: [1, 1],
       quality: 0.5,
     });
-
-    if (!result.canceled) {
-      setImageUri(result.assets[0].uri);
-    }
+    if (!result.canceled) setImageUri(result.assets[0].uri);
   };
 
-  // Menu de Opções ao clicar na foto
   const handlePhotoOptions = () => {
     Alert.alert(
-      "Alterar Foto de Perfil",
+      "Alterar Foto",
       "Escolha uma opção:",
       [
         { text: "Tirar Foto", onPress: pickFromCamera },
-        { text: "Escolher da Galeria", onPress: pickFromGallery },
+        { text: "Galeria", onPress: pickFromGallery },
         { text: "Cancelar", style: "cancel" }
       ]
     );
   };
 
+  // --- SALVAR ---
   const handleSave = async () => {
     setSaving(true);
     try {
@@ -168,41 +229,53 @@ export default function EditProfileScreen({ navigation }) {
 
       const telefoneLimpo = telefone.replace(/\D/g, "");
 
-      // 1. Atualizar Usuario
-      const updates = {
-        nome_razao_social: nome,
-        telefone: telefoneLimpo,
-        foto_url: imageUri // Salva a URI da imagem (temporário, ideal seria upload)
-      };
-
+      // 1. Atualiza Usuário
       const { error: userError } = await supabase
         .from('usuarios')
-        .update(updates)
+        .update({
+          nome_razao_social: nome,
+          telefone: telefoneLimpo,
+          foto_url: imageUri 
+        })
         .eq('usuario_id', user.id);
 
       if (userError) throw userError;
 
-      // 2. Atualizar Endereço
-      const addressData = {
+      // 2. Atualiza ou Cria Endereço
+      // Agora salvamos separadinho para não ter mais problema de parse
+      const addressDataPayload = {
         rua: rua, 
         numero: numero,
         bairro: bairro,
+        cep: cep || '00000-000',
+        latitude: 0, 
+        longitude: 0, 
         is_padrao: true,
         usuario_id: user.id
       };
 
       if (addressId) {
-        await supabase.from('enderecos').update(addressData).eq('id', addressId);
+        const { error: addrError } = await supabase
+          .from('enderecos')
+          .update(addressDataPayload)
+          .eq('id', addressId);
+          
+        if (addrError) throw addrError;
       } else {
-        await supabase.from('enderecos').insert(addressData);
+        const { error: addrError } = await supabase
+          .from('enderecos')
+          .insert(addressDataPayload);
+          
+        if (addrError) throw addrError;
       }
 
-      Alert.alert('Sucesso', 'Perfil atualizado com sucesso!');
-      navigation.goBack();
+      Alert.alert('Sucesso', 'Informações atualizadas!', [
+        { text: 'OK', onPress: () => navigation.goBack() }
+      ]);
 
     } catch (error) {
       console.log('Erro ao salvar:', error);
-      Alert.alert('Erro', 'Não foi possível salvar as alterações.');
+      Alert.alert('Erro', 'Não foi possível salvar: ' + (error.message || ''));
     } finally {
       setSaving(false);
     }
@@ -218,7 +291,6 @@ export default function EditProfileScreen({ navigation }) {
 
   return (
     <SafeAreaView style={styles.container}>
-      {/* Header */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="#333" />
@@ -233,14 +305,12 @@ export default function EditProfileScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
-      {/* CORREÇÃO DO TECLADO */}
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           
-          {/* Área da Foto (Câmera/Galeria) */}
           <View style={styles.avatarSection}>
             <TouchableOpacity style={styles.avatarContainer} onPress={handlePhotoOptions}>
               {imageUri ? (
@@ -297,6 +367,17 @@ export default function EditProfileScreen({ navigation }) {
           />
 
           <Text style={[styles.sectionTitle, { marginTop: 20 }]}>Endereço Principal</Text>
+          
+          <Text style={styles.label}>CEP</Text>
+          <TextInput 
+            style={styles.input} 
+            value={cep} 
+            onChangeText={handleCepChange} 
+            keyboardType="numeric"
+            placeholder="00000-000"
+            maxLength={9}
+          />
+
           <Text style={styles.label}>Logradouro (Rua, Av.)</Text>
           <TextInput 
             style={styles.input} 
@@ -358,7 +439,7 @@ const styles = StyleSheet.create({
     borderRadius: 55, 
     marginBottom: 10, 
     elevation: 5,
-    backgroundColor: '#FFF', // Fundo branco para garantir visual limpo
+    backgroundColor: '#FFF', 
     justifyContent: 'center',
     alignItems: 'center',
     shadowColor: '#000',
@@ -376,7 +457,7 @@ const styles = StyleSheet.create({
   },
   avatarPlaceholder: {
     width: 110,
-    height: 110,
+    height: 110, 
     borderRadius: 55,
     backgroundColor: '#4285F4', 
     justifyContent: 'center',
@@ -411,6 +492,5 @@ const styles = StyleSheet.create({
     color: '#333',
   },
   disabledInput: { backgroundColor: '#F0F0F0', color: '#888' },
-  helperText: { fontSize: 12, color: '#999', marginTop: 5 },
   rowContainer: { flexDirection: 'row', alignItems: 'center' },
 });

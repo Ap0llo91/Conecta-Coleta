@@ -7,8 +7,8 @@ import {
   StyleSheet,
   ScrollView,
   Alert,
-  KeyboardAvoidingView, // <--- Importado
-  Platform // <--- Importado
+  KeyboardAvoidingView,
+  Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
@@ -32,7 +32,10 @@ export default function CitizenAuthScreen({ navigation, route }) {
     <SafeAreaView style={styles.safeArea}>
       {/* 2. Header Personalizado */}
       <View style={styles.header}>
-        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+        <TouchableOpacity
+          onPress={() => navigation.goBack()}
+          style={styles.backButton}
+        >
           <Ionicons name="arrow-back" size={24} color="#333" />
         </TouchableOpacity>
         <Text style={styles.headerTitle}>
@@ -40,8 +43,8 @@ export default function CitizenAuthScreen({ navigation, route }) {
         </Text>
       </View>
 
-      {/* WRAPPER KEYBOARD AVOIDING VIEW ADICIONADO AQUI */}
-      <KeyboardAvoidingView 
+      {/* WRAPPER KEYBOARD AVOIDING VIEW */}
+      <KeyboardAvoidingView
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
@@ -73,22 +76,16 @@ const LoginForm = ({ navigation }) => {
       email,
       password,
     });
-    
+
     if (error) {
       Alert.alert("Erro no Login", error.message);
       setLoading(false);
       return;
     }
-
-    // CORREÇÃO: REMOVIDA A NAVEGAÇÃO MANUAL
-    // O App.js detectará a sessão automaticamente e trocará a tela.
-    
-    // setLoading(false); 
   };
 
   return (
     <View style={styles.formContainer}>
-      {/* Ícone menor para identificar login */}
       <View style={styles.loginIconContainer}>
         <Ionicons name="person" size={60} color={primaryBlue} />
       </View>
@@ -119,14 +116,21 @@ const LoginForm = ({ navigation }) => {
           {loading ? "Entrando..." : "Entrar"}
         </Text>
       </TouchableOpacity>
-      
-      <TouchableOpacity onPress={() => navigation.navigate("ForgotPassword")} style={{alignSelf: 'center', marginTop: 15}}>
+
+      <TouchableOpacity
+        onPress={() => navigation.navigate("ForgotPassword")}
+        style={{ alignSelf: "center", marginTop: 15 }}
+      >
         <Text style={styles.linkText}>Esqueceu a senha?</Text>
       </TouchableOpacity>
-      
-      <TouchableOpacity onPress={() => navigation.navigate("RegisterChoice")} style={{alignSelf: 'center', marginTop: 25}}>
+
+      <TouchableOpacity
+        onPress={() => navigation.navigate("RegisterChoice")}
+        style={{ alignSelf: "center", marginTop: 25 }}
+      >
         <Text style={styles.createAccountText}>
-          Primeira vez aqui? <Text style={styles.createAccountLink}>Criar uma conta</Text>
+          Primeira vez aqui?{" "}
+          <Text style={styles.createAccountLink}>Criar uma conta</Text>
         </Text>
       </TouchableOpacity>
     </View>
@@ -142,7 +146,8 @@ const RegisterForm = ({ navigation }) => {
   const [cpf, setCpf] = useState("");
   const [telefone, setTelefone] = useState("");
 
-  // Endereço dividido
+  // Endereço
+  const [cep, setCep] = useState(""); // Novo estado para CEP
   const [rua, setRua] = useState("");
   const [numero, setNumero] = useState("");
   const [bairro, setBairro] = useState("");
@@ -163,23 +168,40 @@ const RegisterForm = ({ navigation }) => {
   const maskPhone = (text) => {
     let v = text.replace(/\D/g, "");
     v = v.substring(0, 11);
-    if (v.length > 10) {
-      v = v.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, "($1) $2 $3-$4");
-    } else if (v.length > 5) {
-      v = v.replace(/^(\d{2})(\d{4})(\d{0,4})$/, "($1) $2-$3");
-    } else if (v.length > 2) {
-      v = v.replace(/^(\d{2})(\d{0,5})$/, "($1) $2");
+    if (v.length > 2 && v[2] === "9") {
+      if (v.length > 7) {
+        v = v.replace(/^(\d{2})(\d{1})(\d{4})(\d{1,4})$/, "($1) $2 $3-$4");
+      } else {
+        v = v.replace(/^(\d{2})(\d{1})(\d{0,4})$/, "($1) $2 $3");
+      }
+    } else {
+      if (v.length > 6) {
+        v = v.replace(/^(\d{2})(\d{4})(\d{1,4})$/, "($1) $2-$3");
+      } else if (v.length > 2) {
+        v = v.replace(/^(\d{2})(\d{0,4})$/, "($1) $2");
+      } else {
+        v = v.replace(/^(\d*)/, "($1");
+      }
     }
     setTelefone(v);
+  };
+
+  const maskCEP = (text) => {
+    let v = text.replace(/\D/g, "");
+    v = v.substring(0, 8);
+    if (v.length > 5) {
+      v = v.replace(/^(\d{5})(\d)/, "$1-$2");
+    }
+    setCep(v);
   };
 
   const handleRegister = async () => {
     if (loading) return;
 
-    if (!rua || !bairro || (!numero && !semNumero)) {
+    if (!rua || !bairro || !cep || (!numero && !semNumero)) {
       Alert.alert(
-        "Endereço",
-        "Por favor, preencha todos os campos do endereço."
+        "Endereço Incompleto",
+        "Por favor, preencha todos os campos do endereço, incluindo o CEP."
       );
       return;
     }
@@ -187,6 +209,8 @@ const RegisterForm = ({ navigation }) => {
     setLoading(true);
     const cpfLimpo = cpf.replace(/\D/g, "");
     const telLimpo = telefone.replace(/\D/g, "");
+    // O CEP pode ser salvo limpo (sem traço) ou formatado.
+    // Como a tela de edição usa o formato com traço, vamos salvar formatado mesmo para manter padrão visual.
 
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -200,9 +224,9 @@ const RegisterForm = ({ navigation }) => {
     }
 
     if (!authData.user) {
-        Alert.alert("Erro", "Não foi possível criar usuário.");
-        setLoading(false);
-        return;
+      Alert.alert("Erro", "Não foi possível criar usuário.");
+      setLoading(false);
+      return;
     }
 
     // Salva na tabela usuarios
@@ -221,14 +245,18 @@ const RegisterForm = ({ navigation }) => {
       return;
     }
 
-    // Salva endereço separado
+    // Salva endereço
     const numeroFinal = semNumero ? "S/N" : numero;
-    const enderecoCompleto = `${rua}, ${numeroFinal}, ${bairro}`;
 
+    // IMPORTANTE: Agora salvamos a rua apenas no campo rua
+    // E concatenamos para display apenas se necessário em componentes antigos
+    // Mas aqui vamos salvar "limpo" para o EditProfile ler corretamente
     const { error: addrError } = await supabase.from("enderecos").insert({
       usuario_id: authData.user.id,
-      rua: enderecoCompleto,
-      cep: "00000-000",
+      rua: rua, // Salva apenas o nome da rua
+      numero: numeroFinal, // Salva o número separado
+      bairro: bairro, // Salva o bairro separado
+      cep: cep, // Salva o CEP que o usuário digitou
       latitude: 0,
       longitude: 0,
       is_padrao: true,
@@ -241,9 +269,11 @@ const RegisterForm = ({ navigation }) => {
     }
 
     setLoading(false);
-    Alert.alert("Sucesso!", "Conta criada. Verifique seu e-mail para confirmar.", [
-        { text: "OK", onPress: () => navigation.navigate("Welcome") }
-    ]);
+    Alert.alert(
+      "Sucesso!",
+      "Conta criada. Verifique seu e-mail para confirmar.",
+      [{ text: "OK", onPress: () => navigation.navigate("Welcome") }]
+    );
   };
 
   return (
@@ -285,11 +315,21 @@ const RegisterForm = ({ navigation }) => {
         keyboardType="phone-pad"
         value={telefone}
         onChangeText={maskPhone}
-        maxLength={15}
+        maxLength={16}
       />
 
-      {/* Endereço Dividido */}
+      {/* Seção de Endereço Atualizada com CEP */}
       <Text style={[styles.sectionHeader, { marginTop: 10 }]}>Endereço</Text>
+
+      <Text style={styles.label}>CEP</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="00000-000"
+        keyboardType="numeric"
+        value={cep}
+        onChangeText={maskCEP}
+        maxLength={9}
+      />
 
       <Text style={styles.label}>Logradouro (Rua/Av)</Text>
       <TextInput
@@ -319,7 +359,9 @@ const RegisterForm = ({ navigation }) => {
             if (!semNumero) setNumero("");
           }}
         >
-          <View style={[styles.checkboxBase, semNumero && styles.checkedCheckbox]}>
+          <View
+            style={[styles.checkboxBase, semNumero && styles.checkedCheckbox]}
+          >
             {semNumero && <Ionicons name="checkmark" size={16} color="white" />}
           </View>
           <Text style={styles.checkboxLabel}>Sem número</Text>
@@ -360,38 +402,36 @@ const RegisterForm = ({ navigation }) => {
 };
 
 const styles = StyleSheet.create({
-  safeArea: { 
-    flex: 1, 
-    backgroundColor: "#fff" 
+  safeArea: {
+    flex: 1,
+    backgroundColor: "#fff",
   },
-  // Header Styles (Novo)
   header: {
-    flexDirection: 'row',
-    alignItems: 'center',
+    flexDirection: "row",
+    alignItems: "center",
     paddingHorizontal: 20,
     paddingVertical: 15,
     borderBottomWidth: 1,
-    borderBottomColor: '#F0F0F0',
-    backgroundColor: '#FFF',
+    borderBottomColor: "#F0F0F0",
+    backgroundColor: "#FFF",
   },
   backButton: {
     marginRight: 15,
   },
   headerTitle: {
     fontSize: 20,
-    fontWeight: 'bold',
-    color: '#333',
+    fontWeight: "bold",
+    color: "#333",
   },
-  
-  container: { 
-    flexGrow: 1, 
-    padding: 20 
+  container: {
+    flexGrow: 1,
+    padding: 20,
   },
-  formContainer: { 
-    width: "100%" 
+  formContainer: {
+    width: "100%",
   },
   loginIconContainer: {
-    alignItems: 'center',
+    alignItems: "center",
     marginBottom: 30,
     marginTop: 20,
   },
@@ -402,12 +442,12 @@ const styles = StyleSheet.create({
     marginTop: 5,
     marginBottom: 15,
   },
-  label: { 
-    fontSize: 14, 
-    color: "#666", 
-    marginBottom: 6, 
+  label: {
+    fontSize: 14,
+    color: "#666",
+    marginBottom: 6,
     marginLeft: 0,
-    fontWeight: '500' 
+    fontWeight: "500",
   },
   input: {
     backgroundColor: "#f9f9f9",
@@ -417,16 +457,16 @@ const styles = StyleSheet.create({
     padding: 14,
     marginBottom: 16,
     fontSize: 16,
-    color: '#333'
+    color: "#333",
   },
-  disabledInput: { 
-    backgroundColor: "#eee", 
-    color: "#999" 
+  disabledInput: {
+    backgroundColor: "#eee",
+    color: "#999",
   },
-  rowContainer: { 
-    flexDirection: "row", 
-    alignItems: "center", 
-    marginBottom: 5 
+  rowContainer: {
+    flexDirection: "row",
+    alignItems: "center",
+    marginBottom: 5,
   },
   checkboxContainer: {
     flexDirection: "row",
@@ -445,12 +485,12 @@ const styles = StyleSheet.create({
     alignItems: "center",
     backgroundColor: "white",
   },
-  checkedCheckbox: { 
-    backgroundColor: primaryBlue 
+  checkedCheckbox: {
+    backgroundColor: primaryBlue,
   },
-  checkboxLabel: { 
-    fontSize: 14, 
-    color: "#333" 
+  checkboxLabel: {
+    fontSize: 14,
+    color: "#333",
   },
   button: {
     borderRadius: 8,
@@ -458,30 +498,30 @@ const styles = StyleSheet.create({
     alignItems: "center",
     marginTop: 20,
     elevation: 2,
-    shadowColor: '#000',
+    shadowColor: "#000",
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
   },
-  blueButton: { 
-    backgroundColor: primaryBlue 
+  blueButton: {
+    backgroundColor: primaryBlue,
   },
-  buttonText: { 
-    color: "#fff", 
-    fontSize: 16, 
-    fontWeight: "bold" 
+  buttonText: {
+    color: "#fff",
+    fontSize: 16,
+    fontWeight: "bold",
   },
   linkText: {
     color: primaryBlue,
-    fontWeight: '600',
+    fontWeight: "600",
     fontSize: 14,
   },
-  createAccountText: { 
-    fontSize: 16, 
-    color: "#666" 
+  createAccountText: {
+    fontSize: 16,
+    color: "#666",
   },
-  createAccountLink: { 
-    color: primaryBlue, 
-    fontWeight: "bold" 
+  createAccountLink: {
+    color: primaryBlue,
+    fontWeight: "bold",
   },
 });

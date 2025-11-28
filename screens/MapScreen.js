@@ -12,32 +12,26 @@ import {
 import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from 'react-native-maps';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
+import { supabase } from '../utils/supabaseClient';
 import * as Location from 'expo-location'; 
 
-// --- 1. COMPONENTE PARA ESTABILIZAR ÍCONES ---
+// --- CONSTANTES ---
+const CYCLE_MINUTES = 20; // Sincronizado com HomeScreen
+
 const StableMarker = ({ coordinate, onPress, children, anchor, flat }) => {
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
-  
   useEffect(() => {
     const timer = setTimeout(() => setTracksViewChanges(false), 500);
     return () => clearTimeout(timer);
   }, []);
-
   return (
-    <Marker 
-      coordinate={coordinate} 
-      onPress={onPress} 
-      tracksViewChanges={tracksViewChanges}
-      anchor={anchor} 
-      flat={flat} 
-      calloutAnchor={{ x: 0.5, y: 0 }} 
-    >
+    <Marker coordinate={coordinate} onPress={onPress} tracksViewChanges={tracksViewChanges} anchor={anchor} flat={flat} calloutAnchor={{ x: 0.5, y: 0 }}>
       {children}
     </Marker>
   );
 };
 
-// --- 2. ESTILO DO MAPA (CLEAN & WHITE) ---
+// --- ESTILO DO MAPA ---
 const MAP_STYLE = [
   { "elementType": "geometry", "stylers": [{ "color": "#f5f5f5" }] },
   { "elementType": "labels.icon", "stylers": [{ "visibility": "off" }] },
@@ -59,7 +53,6 @@ const MAP_STYLE = [
   { "featureType": "water", "elementType": "labels.text.fill", "stylers": [{ "color": "#9e9e9e" }] }
 ];
 
-// Fallback
 const FALLBACK_ROUTE = [
   { latitude: -8.112000, longitude: -34.895000 },
   { latitude: -8.113200, longitude: -34.895500 },
@@ -67,40 +60,12 @@ const FALLBACK_ROUTE = [
 ];
 
 const FIXED_POINTS = [
-  { 
-    id: 1, type: 'ecoponto', title: 'Ecoponto Boa Viagem', 
-    address: 'Praça de Boa Viagem, s/n', hours: 'Aberto 24h', 
-    coords: { latitude: -8.127500, longitude: -34.902000 }, 
-    materials: ['Papel', 'Plástico', 'Metal', 'Vidro'] 
-  },
-  { 
-    id: 2, type: 'reciclagem', title: 'Ponto Shopping Recife', 
-    address: 'Rua Padre Carapuceiro, 777', hours: 'Seg-Sáb: 10h-22h', 
-    coords: { latitude: -8.118500, longitude: -34.904500 }, 
-    materials: ['Eletrônicos', 'Pilhas', 'Baterias'] 
-  },
-  { 
-    id: 3, type: 'proibido', title: 'Canal Setúbal (Margem)', 
-    address: 'Rua Cosmorama, próximo à ponte', warning: 'Área de proteção ambiental. Proibido descarte.', 
-    coords: { latitude: -8.135000, longitude: -34.908000 } 
-  },
-  { 
-    id: 4, type: 'ecoponto', title: 'Ecoponto Jaqueira', 
-    address: 'Parque da Jaqueira (Entrada Norte)', hours: 'Diariamente: 5h às 22h', 
-    coords: { latitude: -8.037500, longitude: -34.906500 }, 
-    materials: ['Papel', 'Plástico', 'Metal', 'Óleo'] 
-  },
-  { 
-    id: 5, type: 'reciclagem', title: 'Coleta Plaza Casa Forte', 
-    address: 'Rua Dr. João Santos Filho, 255', hours: 'Seg-Sáb: 10h-22h', 
-    coords: { latitude: -8.036000, longitude: -34.912000 }, 
-    materials: ['Vidro', 'Eletrônicos'] 
-  },
-  { 
-    id: 6, type: 'proibido', title: 'Margem Rio Capibaribe', 
-    address: 'Av. Beira Rio (Trecho Graças)', warning: 'Área de preservação permanente. Sujeito a multa.', 
-    coords: { latitude: -8.045000, longitude: -34.900000 } 
-  }
+  { id: 1, type: 'ecoponto', title: 'Ecoponto Boa Viagem', address: 'Praça de Boa Viagem, s/n', hours: 'Aberto 24h', coords: { latitude: -8.127500, longitude: -34.902000 }, materials: ['Papel', 'Plástico', 'Metal', 'Vidro'] },
+  { id: 2, type: 'reciclagem', title: 'Ponto Shopping Recife', address: 'Rua Padre Carapuceiro, 777', hours: 'Seg-Sáb: 10h-22h', coords: { latitude: -8.118500, longitude: -34.904500 }, materials: ['Eletrônicos', 'Pilhas', 'Baterias'] },
+  { id: 3, type: 'proibido', title: 'Canal Setúbal (Margem)', address: 'Rua Cosmorama, próximo à ponte', warning: 'Área de proteção ambiental. Proibido descarte.', coords: { latitude: -8.135000, longitude: -34.908000 } },
+  { id: 4, type: 'ecoponto', title: 'Ecoponto Jaqueira', address: 'Parque da Jaqueira (Entrada Norte)', hours: 'Diariamente: 5h às 22h', coords: { latitude: -8.037500, longitude: -34.906500 }, materials: ['Papel', 'Plástico', 'Metal', 'Óleo'] },
+  { id: 5, type: 'reciclagem', title: 'Coleta Plaza Casa Forte', address: 'Rua Dr. João Santos Filho, 255', hours: 'Seg-Sáb: 10h-22h', coords: { latitude: -8.036000, longitude: -34.912000 }, materials: ['Vidro', 'Eletrônicos'] },
+  { id: 6, type: 'proibido', title: 'Margem Rio Capibaribe', address: 'Av. Beira Rio (Trecho Graças)', warning: 'Área de preservação permanente. Sujeito a multa.', coords: { latitude: -8.045000, longitude: -34.900000 } }
 ];
 
 export default function MapScreen({ navigation }) {
@@ -109,6 +74,7 @@ export default function MapScreen({ navigation }) {
   const [userLocation, setUserLocation] = useState(null); 
   const [truckRoute, setTruckRoute] = useState(FALLBACK_ROUTE); 
   const [currentTruckPos, setCurrentTruckPos] = useState(FALLBACK_ROUTE[0]);
+  const [userAddress, setUserAddress] = useState('');
   
   const [showFilters, setShowFilters] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState(null);
@@ -121,15 +87,34 @@ export default function MapScreen({ navigation }) {
     caminhao: true,
   });
 
+  // --- SIMULAÇÃO DA POSIÇÃO DO CAMINHÃO (SYNC COM HOME) ---
+  const calculateTruckPosition = (route) => {
+    if (!route || route.length === 0) return null;
+    const CYCLE_MS = CYCLE_MINUTES * 60 * 1000;
+    const now = Date.now();
+    
+    // Progresso Linear: 0.0 (Início) -> 1.0 (Fim/Casa do Usuário)
+    let progress = (now % CYCLE_MS) / CYCLE_MS; 
+    
+    // Para simular ida e volta (opcional, mas aqui vamos fazer one-way: longe -> perto -> reset)
+    // Se quiser resetar:
+    const totalIndex = route.length - 1;
+    const currentIndex = Math.floor(progress * totalIndex);
+    
+    return route[currentIndex];
+  };
+
   const fetchStreetRoute = async (userLat, userLng) => {
     try {
-      const startLat = userLat - 0.005; 
-      const startLng = userLng - 0.001; 
-      const endLat = userLat + 0.005; 
-      const endLng = userLng + 0.001;
+      // Rota: Começa 6km ao Norte/Sul (simulado) e termina EXATAMENTE no usuário
+      const startLat = userLat - 0.05; // ~5.5km de distância latitudinal
+      const startLng = userLng - 0.02; 
       
-      const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${userLng},${userLat};${endLng},${endLat}?overview=full&geometries=geojson`;
+      // Destino é o usuário
+      const endLat = userLat; 
+      const endLng = userLng;
       
+      const url = `https://router.project-osrm.org/route/v1/driving/${startLng},${startLat};${endLng},${endLat}?overview=full&geometries=geojson`;
       const response = await fetch(url);
       const json = await response.json();
 
@@ -138,67 +123,86 @@ export default function MapScreen({ navigation }) {
           latitude: coord[1],
           longitude: coord[0],
         }));
-
         if (coordinates.length > 0) {
-            const roundTrip = [...coordinates, ...coordinates.slice().reverse()];
-            setTruckRoute(roundTrip);
-            setCurrentTruckPos(roundTrip[0]);
+            setTruckRoute(coordinates);
+            setCurrentTruckPos(calculateTruckPosition(coordinates));
         }
       }
     } catch (error) {
-      console.log("Erro ao buscar rota de rua:", error);
+      console.log("Erro ao buscar rota:", error);
     }
   };
 
   useEffect(() => {
     (async () => {
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      if (status !== 'granted') {
-        Alert.alert('Permissão negada', 'Não foi possível acessar sua localização.');
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+            // 1. Buscar endereço do banco
+            const { data: addressData } = await supabase
+                .from('enderecos')
+                .select('*')
+                .eq('usuario_id', user.id)
+                .eq('is_padrao', true)
+                .maybeSingle();
+            
+            if (addressData) {
+                setUserAddress(`${addressData.rua}, ${addressData.numero}`);
+                const fullAddr = `${addressData.rua}, ${addressData.numero}, ${addressData.bairro}, Recife`;
+                
+                // 2. Geocodificar endereço do banco
+                const geocoded = await Location.geocodeAsync(fullAddr);
+                
+                if (geocoded.length > 0) {
+                    const { latitude, longitude } = geocoded[0];
+                    setUserLocation({
+                        latitude,
+                        longitude,
+                        latitudeDelta: 0.02,
+                        longitudeDelta: 0.02,
+                    });
+                    await fetchStreetRoute(latitude, longitude);
+                    setLoadingLocation(false);
+                    return;
+                }
+            }
+        }
+
+        // Fallback: GPS
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status === 'granted') {
+            let location = await Location.getCurrentPositionAsync({});
+            setUserLocation({
+                latitude: location.coords.latitude,
+                longitude: location.coords.longitude,
+                latitudeDelta: 0.02,
+                longitudeDelta: 0.02,
+            });
+            await fetchStreetRoute(location.coords.latitude, location.coords.longitude);
+        }
         setLoadingLocation(false);
-        return;
+
+      } catch (error) {
+          console.log("Erro setup mapa:", error);
+          setLoadingLocation(false);
       }
-
-      let location = await Location.getCurrentPositionAsync({});
-      const { latitude, longitude } = location.coords;
-
-      setUserLocation({
-        latitude,
-        longitude,
-        latitudeDelta: 0.015,
-        longitudeDelta: 0.015,
-      });
-
-      await fetchStreetRoute(latitude, longitude);
-      setLoadingLocation(false);
     })();
   }, []);
 
-  // SIMULAÇÃO DO CAMINHÃO (AJUSTADO PARA SER LENTO E CONTROLADO)
+  // ATUALIZAÇÃO
   useEffect(() => {
     const interval = setInterval(() => {
-      setCurrentTruckPos(prev => {
-        const currentIndex = truckRoute.indexOf(prev);
-        if (currentIndex === -1) return truckRoute[0];
-        
-        // --- AJUSTE DE VELOCIDADE AQUI ---
-        // Antes era +40 (muito rápido).
-        // Agora é +4. Isso significa que ele anda poucos metros a cada 20s.
-        // Simula o caminhão parando para pegar o lixo.
-        let nextIndex = currentIndex + 4;
-        
-        if (nextIndex >= truckRoute.length) {
-            nextIndex = nextIndex % truckRoute.length;
-        }
-        
-        return truckRoute[nextIndex];
-      });
-    }, 20000); // Mantido atualização a cada 20 segundos
+      if (truckRoute.length > 0) {
+        const newPos = calculateTruckPosition(truckRoute);
+        if (newPos) setCurrentTruckPos(newPos);
+      }
+    }, 1000); 
     return () => clearInterval(interval);
   }, [truckRoute]);
 
   const handleCenterOnTruck = () => {
-    if (mapRef.current) {
+    if (mapRef.current && currentTruckPos) {
       mapRef.current.animateToRegion({
         latitude: currentTruckPos.latitude,
         longitude: currentTruckPos.longitude,
@@ -239,12 +243,11 @@ export default function MapScreen({ navigation }) {
       </View>
 
       <ScrollView style={styles.scrollContainer} showsVerticalScrollIndicator={false}>
-        
         <View style={styles.mapWrapper}>
           {loadingLocation && (
              <View style={styles.mapLoadingOverlay}>
                <ActivityIndicator size="large" color="#00A859" />
-               <Text style={{marginTop: 10, color: '#555'}}>Traçando rota...</Text>
+               <Text style={{marginTop: 10, color: '#555'}}>Localizando seu endereço...</Text>
              </View>
           )}
 
@@ -259,19 +262,29 @@ export default function MapScreen({ navigation }) {
               latitudeDelta: 0.12,
               longitudeDelta: 0.12,
             }}
-            showsUserLocation={true}
+            showsUserLocation={true} 
             showsMyLocationButton={true}
             onPress={() => {
                 setSelectedPoint(null);
                 setShowFilters(false);
             }} 
           >
+            {/* Rota do Caminhão (Até o usuário) */}
             {filters.caminhao && truckRoute.length > 1 && (
               <Polyline 
                 coordinates={truckRoute}
                 strokeColor="#007BFF"
                 strokeWidth={4} 
               />
+            )}
+
+            {/* Marcador do Usuário (Endereço de Cadastro) */}
+            {userLocation && (
+                <Marker coordinate={userLocation} title="Seu Endereço">
+                    <View style={styles.homeMarker}>
+                        <Ionicons name="home" size={16} color="white" />
+                    </View>
+                </Marker>
             )}
 
             {FIXED_POINTS.map(point => {
@@ -283,7 +296,7 @@ export default function MapScreen({ navigation }) {
               );
             })}
 
-            {filters.caminhao && (
+            {filters.caminhao && currentTruckPos && (
               <StableMarker 
                 coordinate={currentTruckPos} 
                 onPress={() => setSelectedPoint({ type: 'caminhao', title: 'Caminhão da Coleta' })}
@@ -333,7 +346,7 @@ export default function MapScreen({ navigation }) {
               <MaterialCommunityIcons name="truck-outline" size={24} color="#007BFF" />
             </View>
             <View>
-              <Text style={styles.truckTitle}>Caminhão próximo a você</Text>
+              <Text style={styles.truckTitle}>Caminhão próximo ao seu endereço</Text>
               <Text style={styles.truckSubtitle}>Seguindo rota oficial</Text>
             </View>
           </View>
@@ -343,9 +356,9 @@ export default function MapScreen({ navigation }) {
                 <View style={styles.dot} />
                 <Text style={styles.liveText}>EM ROTA</Text>
             </View>
-            <Text style={styles.timeText}>Sua região</Text>
+            <Text style={styles.timeText}>{userAddress || "Sua região"}</Text>
           </View>
-          <Text style={styles.updateText}>Atualizando posição a cada 20s</Text>
+          <Text style={styles.updateText}>Atualizando posição em tempo real</Text>
           <View style={styles.divider} />
         </TouchableOpacity>
 
@@ -385,7 +398,7 @@ export default function MapScreen({ navigation }) {
                      <Text style={[styles.popupText, {marginTop: 5}]}>Status: Em movimento pela sua rua (Coleta Porta a Porta).</Text>
                      <View style={{flexDirection: 'row', alignItems: 'center', marginTop: 15, backgroundColor: '#E3F2FD', padding: 10, borderRadius: 8}}>
                         <MaterialCommunityIcons name="speedometer" size={20} color="#007BFF" style={{marginRight: 8}} />
-                        <Text style={{fontWeight: 'bold', color: '#007BFF'}}>Velocidade Média: 10 km/h</Text>
+                        <Text style={{fontWeight: 'bold', color: '#007BFF'}}>Velocidade Média: 20 km/h</Text>
                      </View>
                    </View>
                 ) : (
@@ -482,21 +495,10 @@ const styles = StyleSheet.create({
   markerBase: { padding: 3, backgroundColor: 'white', borderRadius: 20, elevation: 3 },
   markerInner: { width: 24, height: 24, borderRadius: 12, justifyContent: 'center', alignItems: 'center' },
   
-  optimizedTruckMarker: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: '#007BFF',
-    justifyContent: 'center',
-    alignItems: 'center',
-    borderWidth: 2,
-    borderColor: 'white',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.25,
-    shadowRadius: 3.84,
-    elevation: 5,
-  },
+  // Marcador da Casa
+  homeMarker: { width: 24, height: 24, borderRadius: 12, backgroundColor: '#FF5722', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white' },
+
+  optimizedTruckMarker: { width: 36, height: 36, borderRadius: 18, backgroundColor: '#007BFF', justifyContent: 'center', alignItems: 'center', borderWidth: 2, borderColor: 'white', shadowColor: '#000', shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.25, shadowRadius: 3.84, elevation: 5 },
 
   truckCard: { backgroundColor: 'white', borderRadius: 15, padding: 20, marginTop: 20, borderWidth: 1, borderColor: '#EEE', elevation: 2 },
   truckHeader: { flexDirection: 'row', alignItems: 'center', marginBottom: 15 },

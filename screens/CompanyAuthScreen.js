@@ -8,7 +8,7 @@ import {
   ScrollView, 
   Alert,
   Platform,
-  KeyboardAvoidingView // <--- Importado
+  KeyboardAvoidingView
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; 
@@ -40,7 +40,7 @@ export default function CompanyAuthScreen({ navigation, route }) {
         </Text>
       </View>
 
-      {/* WRAPPER KEYBOARD AVOIDING VIEW ADICIONADO AQUI */}
+      {/* WRAPPER KEYBOARD AVOIDING VIEW */}
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
@@ -103,11 +103,6 @@ const LoginForm = ({ navigation }) => {
       setLoading(false);
       return;
     }
-
-    // CORREÇÃO: REMOVIDA A NAVEGAÇÃO MANUAL
-    // O App.js detectará a sessão automaticamente e trocará a tela.
-    
-    // setLoading(false); 
   };
 
   return (
@@ -158,6 +153,8 @@ const RegisterForm = ({ navigation }) => {
   const [telefone, setTelefone] = useState('');
   const [password, setPassword] = useState('');
   
+  // Endereço
+  const [cep, setCep] = useState(''); // Novo Campo
   const [rua, setRua] = useState('');
   const [numero, setNumero] = useState('');
   const [semNumero, setSemNumero] = useState(false);
@@ -168,11 +165,21 @@ const RegisterForm = ({ navigation }) => {
   const handleCnpjChange = (text) => setCnpj(formatCNPJ(text));
   const handlePhoneChange = (text) => setTelefone(formatPhone(text));
 
+  const maskCEP = (text) => {
+    let v = text.replace(/\D/g, "");
+    v = v.substring(0, 8);
+    if (v.length > 5) {
+      v = v.replace(/^(\d{5})(\d)/, "$1-$2");
+    }
+    setCep(v);
+  };
+
   const handleRegister = async () => {
     if (loading) return;
     
-    if (!email || !password || !razaoSocial || !cnpj || !rua || !bairro || (!numero && !semNumero)) {
-        Alert.alert('Atenção', 'Por favor, preencha todos os campos obrigatórios.');
+    // Validação inclui o CEP agora
+    if (!email || !password || !razaoSocial || !cnpj || !rua || !bairro || !cep || (!numero && !semNumero)) {
+        Alert.alert('Atenção', 'Por favor, preencha todos os campos obrigatórios, incluindo o CEP.');
         return;
     }
 
@@ -211,14 +218,15 @@ const RegisterForm = ({ navigation }) => {
       return;
     }
     
-    const enderecoCompleto = `${rua}, ${semNumero ? 'S/N' : numero}, ${bairro}`;
-
+    // Salva Rua separada (padrão novo)
     const { error: addrError } = await supabase
       .from('enderecos')
       .insert({
         usuario_id: authData.user.id,
-        rua: enderecoCompleto, 
-        cep: '00000-000', 
+        rua: rua, 
+        numero: semNumero ? 'S/N' : numero,
+        bairro: bairro,
+        cep: cep, // Salva o CEP digitado
         latitude: 0,
         longitude: 0,
         is_padrao: true
@@ -282,6 +290,16 @@ const RegisterForm = ({ navigation }) => {
 
       <Text style={[styles.sectionHeader, { marginTop: 10 }]}>Endereço</Text>
       
+      <Text style={styles.label}>CEP</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="00000-000"
+        keyboardType="numeric"
+        value={cep}
+        onChangeText={maskCEP}
+        maxLength={9}
+      />
+
       <Text style={styles.label}>Logradouro (Rua/Av)</Text>
       <TextInput 
         style={styles.input} 

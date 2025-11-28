@@ -1,21 +1,22 @@
 import React from 'react';
-import { View, Text, TouchableOpacity, StyleSheet, Image } from 'react-native';
-// ATUALIZAÇÃO: Usando a biblioteca correta para evitar problemas com notch/status bar
+import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, FontAwesome5 } from '@expo/vector-icons'; 
 import Logo from '../components/Logo';
 
 export default function WelcomeScreen({ navigation }) {
   return (
-    // Trocámos View por SafeAreaView aqui
     <SafeAreaView style={styles.container}>
       
-      {/* Removidas as chaves extras {} ao redor do Logo */}
-      <Logo style={styles.logo} />
-      
-      <Text style={styles.title}>Conecta Coleta</Text>
-      <Text style={styles.subtitle}>Bem-vindo! Como deseja entrar?</Text>
+      {/* Cabeçalho */}
+      <View style={styles.header}>
+        <Logo style={styles.logo} />
+        
+        <Text style={styles.title}>Conecta Coleta</Text>
+        <Text style={styles.subtitle}>Bem-vindo! Como deseja entrar?</Text>
+      </View>
 
+      {/* Botões de Acesso */}
       <View style={styles.buttonsContainer}>
         <TouchableOpacity 
           style={styles.citizenButton} 
@@ -40,11 +41,13 @@ export default function WelcomeScreen({ navigation }) {
         </TouchableOpacity>
       </View>
 
+      {/* Link para Criar Conta */}
       <TouchableOpacity onPress={() => navigation.navigate('RegisterChoice')}>
         <Text style={styles.createAccountText}>
           Primeira vez aqui? <Text style={styles.createAccountLink}>Criar uma conta</Text>
         </Text>
       </TouchableOpacity>
+      
     </SafeAreaView>
   );
 }
@@ -59,15 +62,11 @@ const styles = StyleSheet.create({
   },
   header: {
     alignItems: 'center',
-    marginBottom: 50,
+    marginBottom: 40,
   },
   logo: {
-    width: 100,
-    height: 100,
-    borderRadius: 50, 
-    backgroundColor: '#3498db',
-    justifyContent: 'center',
-    alignItems: 'center',
+    width: 300,  // Mantido em 300 como solicitado
+    height: 300,
     marginBottom: 10,
   },
   title: {
@@ -80,6 +79,7 @@ const styles = StyleSheet.create({
     fontSize: 18,
     color: '#666',
     marginBottom: 50, 
+    textAlign: 'center',
   },
   buttonsContainer: {
     width: '90%', 
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
   companyButton: {
     flexDirection: 'row',
-    backgroundColor: '#FFD700', 
+    backgroundColor: '#FFD700', // Amarelo consistente com a marca
     borderRadius: 10,
     padding: 20,
     alignItems: 'center',
@@ -121,6 +121,7 @@ const styles = StyleSheet.create({
   buttonSubtitle: {
     fontSize: 14,
     color: '#FFFFFF',
+    opacity: 0.9,
   },
   createAccountText: {
     fontSize: 16,
