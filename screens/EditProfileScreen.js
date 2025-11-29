@@ -69,12 +69,57 @@ export default function EditProfileScreen({ navigation }) {
     setCep(applyCepMask(text));
   };
 
-  // Garante que carrega ao entrar na tela
   useFocusEffect(
     useCallback(() => {
       fetchProfileData();
     }, [])
   );
+
+  const fillAddressFields = (data) => {
+      if (!data) return;
+      console.log("Preenchendo endereço na tela:", data);
+      setAddressId(data.id);
+
+      // CEP
+      if (data.cep && data.cep !== '00000-000') {
+          setCep(data.cep);
+      } else {
+          setCep('');
+      }
+
+      // Demais campos
+      if (data.numero || data.bairro) {
+          setRua(data.rua || '');
+          setNumero(data.numero ? String(data.numero) : '');
+          setBairro(data.bairro || '');
+      } else {
+          // Fallback legado
+          let r = data.rua || '';
+          let n = '';
+          let b = '';
+          if (r.includes(',')) {
+              const parts = r.split(',');
+              if (parts.length >= 3) {
+                  r = parts[0].trim();
+                  n = parts[1].trim();
+                  b = parts.slice(2).join(',').trim();
+              } else if (parts.length === 2) {
+                  r = parts[0].trim();
+                  const part2 = parts[1].trim();
+                  if (part2.includes('-')) {
+                      const subParts = part2.split('-');
+                      n = subParts[0].trim();
+                      b = subParts.slice(1).join('-').trim();
+                  } else {
+                      n = part2;
+                  }
+              }
+          }
+          setRua(r);
+          setNumero(n);
+          setBairro(b);
+      }
+  };
 
   const fetchProfileData = async () => {
     setLoading(true);
@@ -86,7 +131,7 @@ export default function EditProfileScreen({ navigation }) {
       }
 
       // 1. Busca Dados Pessoais
-      const { data: profile, error: profileError } = await supabase
+      const { data: profile } = await supabase
         .from('usuarios')
         .select('*') 
         .eq('usuario_id', user.id)
@@ -98,86 +143,46 @@ export default function EditProfileScreen({ navigation }) {
         setEmail(profile.email || '');
         setCpf(profile.cpf_cnpj || '');
         if (profile.foto_url) setImageUri(profile.foto_url);
-      } else if (profileError) {
-          console.log("Erro ao buscar usuario:", profileError.message);
       }
 
-      // 2. Busca o Endereço
-      let addressData = null;
+      // 2. Busca o Endereço (TENTATIVA BLINDADA)
+      let finalAddress = null;
 
-      const { data: defaultAddr } = await supabase
-        .from('enderecos')
-        .select('*')
-        .eq('usuario_id', user.id)
-        .eq('is_padrao', true)
-        .limit(1)
-        .maybeSingle();
-
-      if (defaultAddr) {
-        addressData = defaultAddr;
-      } else {
-        const { data: latestAddr } = await supabase
+      try {
+        // Tenta a busca ideal (pelo mais recente)
+        const { data: latest, error: sortError } = await supabase
             .from('enderecos')
             .select('*')
             .eq('usuario_id', user.id)
-            .order('created_at', { ascending: false })
+            .order('created_at', { ascending: false }) 
             .limit(1)
             .maybeSingle();
-        if (latestAddr) addressData = latestAddr;
+        
+        if (sortError) throw sortError;
+        finalAddress = latest;
+
+      } catch (sortErr) {
+        console.log("Erro na busca ordenada (provavel falta de created_at):", sortErr.message);
+        
+        // PLANO B: Busca simples (pega qualquer um para não ficar em branco)
+        const { data: fallback } = await supabase
+            .from('enderecos')
+            .select('*')
+            .eq('usuario_id', user.id)
+            .limit(1)
+            .maybeSingle();
+        
+        finalAddress = fallback;
       }
 
-      if (addressData) {
-        console.log("Endereço carregado para edição (ID):", addressData.id);
-        setAddressId(addressData.id);
-        
-        // Lógica de Preenchimento CORRIGIDA
-        if (addressData.numero || addressData.bairro) {
-            // Caso já esteja salvo nas colunas corretas (ideal)
-            setRua(addressData.rua || '');
-            setNumero(addressData.numero ? String(addressData.numero) : '');
-            setBairro(addressData.bairro || '');
-        } else {
-            // Caso esteja salvo tudo junto na coluna 'rua' (legado do cadastro)
-            // Formato esperado: "Rua X, 123, Bairro Y"
-            let r = addressData.rua || '';
-            let n = '';
-            let b = '';
-
-            if (r.includes(',')) {
-                const parts = r.split(',');
-                
-                // Se tiver 3 partes: Rua, Numero, Bairro
-                if (parts.length >= 3) {
-                    r = parts[0].trim();
-                    n = parts[1].trim();
-                    // Junta o resto caso o bairro tenha vírgulas
-                    b = parts.slice(2).join(',').trim();
-                } 
-                // Se tiver 2 partes: Rua, Numero (e talvez bairro com traço)
-                else if (parts.length === 2) {
-                    r = parts[0].trim();
-                    const part2 = parts[1].trim();
-                    
-                    if (part2.includes('-')) {
-                        // Formato antigo com traço: "123 - Centro"
-                        const subParts = part2.split('-');
-                        n = subParts[0].trim();
-                        b = subParts.slice(1).join('-').trim();
-                    } else {
-                        n = part2;
-                    }
-                }
-            }
-            
-            setRua(r);
-            setNumero(n);
-            setBairro(b);
-        }
-        setCep(addressData.cep || '');
+      if (finalAddress) {
+          fillAddressFields(finalAddress);
+      } else {
+          console.log("Nenhum endereço encontrado.");
       }
 
     } catch (error) {
-      console.log('Erro geral ao carregar edição:', error);
+      console.log('Erro fatal no fetch:', error);
     } finally {
       setLoading(false);
     }
@@ -241,8 +246,7 @@ export default function EditProfileScreen({ navigation }) {
 
       if (userError) throw userError;
 
-      // 2. Atualiza ou Cria Endereço
-      // Agora salvamos separadinho para não ter mais problema de parse
+      // 2. Insere Endereço
       const addressDataPayload = {
         rua: rua, 
         numero: numero,
@@ -254,20 +258,11 @@ export default function EditProfileScreen({ navigation }) {
         usuario_id: user.id
       };
 
-      if (addressId) {
-        const { error: addrError } = await supabase
-          .from('enderecos')
-          .update(addressDataPayload)
-          .eq('id', addressId);
-          
-        if (addrError) throw addrError;
-      } else {
-        const { error: addrError } = await supabase
-          .from('enderecos')
-          .insert(addressDataPayload);
-          
-        if (addrError) throw addrError;
-      }
+      const { error: addrError } = await supabase
+        .from('enderecos')
+        .insert(addressDataPayload);
+        
+      if (addrError) throw addrError;
 
       Alert.alert('Sucesso', 'Informações atualizadas!', [
         { text: 'OK', onPress: () => navigation.goBack() }
@@ -392,7 +387,8 @@ export default function EditProfileScreen({ navigation }) {
               <TextInput 
                 style={styles.input} 
                 value={numero} 
-                onChangeText={setNumero} 
+                onChangeText={(text) => setNumero(text.replace(/[^0-9]/g, ''))} 
+                keyboardType="numeric"
                 placeholder="123"
               />
             </View>
@@ -417,7 +413,6 @@ export default function EditProfileScreen({ navigation }) {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#FFF' },
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
-  
   header: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -429,9 +424,7 @@ const styles = StyleSheet.create({
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   saveButtonText: { fontSize: 16, color: '#007BFF', fontWeight: 'bold' },
-
   content: { padding: 20 },
-
   avatarSection: { alignItems: 'center', marginBottom: 30 },
   avatarContainer: { 
     width: 110, 
@@ -479,7 +472,6 @@ const styles = StyleSheet.create({
     borderColor: '#FFF',
   },
   changePhotoText: { color: '#007BFF', fontSize: 15, fontWeight: '600' },
-
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 15 },
   label: { fontSize: 14, color: '#666', marginBottom: 5, marginTop: 10 },
   input: {

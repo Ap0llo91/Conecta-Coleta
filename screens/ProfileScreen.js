@@ -32,11 +32,9 @@ const formatDocument = (text) => {
 const formatPhone = (text) => {
   if (!text) return "Telefone não informado";
   const cleaned = text.replace(/\D/g, "");
-  // Formato (XX) 9 XXXX-XXXX
   if (cleaned.length === 11) {
     return cleaned.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, "($1) $2 $3-$4");
-  }
-  // Formato (XX) XXXX-XXXX
+  } 
   else if (cleaned.length === 10) {
     return cleaned.replace(/^(\d{2})(\d{4})(\d{4})$/, "($1) $2-$3");
   }
@@ -56,60 +54,32 @@ export default function ProfileScreen({ navigation }) {
 
   const fetchUserData = async () => {
     try {
-      // 1. Pega Usuário Autenticado
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) {
         setLoading(false);
         return;
       }
 
-      // 2. Busca Dados do Perfil (Tabela usuarios)
-      const { data: profileData, error: profileError } = await supabase
+      // 1. Perfil
+      const { data: profileData } = await supabase
         .from("usuarios")
         .select("*")
         .eq("usuario_id", user.id)
         .single();
 
-      if (profileError) {
-        console.log("Erro ao buscar perfil:", profileError.message);
-      } else {
-        setProfile(profileData);
-      }
+      if (profileData) setProfile(profileData);
 
-      // 3. Busca Endereço (Tabela enderecos)
-      // Tenta pegar o que tem is_padrao = true primeiro
-      let { data: addressData, error: addressError } = await supabase
+      // 2. Endereço (Pega o mais recente, sem filtros complexos)
+      const { data: addressData } = await supabase
         .from("enderecos")
         .select("*")
         .eq("usuario_id", user.id)
-        .eq("is_padrao", true)
+        .order("created_at", { ascending: false }) 
         .limit(1)
         .maybeSingle();
 
-      // Se não achou padrão ou deu erro, tenta pegar o último criado (fallback)
-      if (!addressData) {
-        const { data: latestAddress } = await supabase
-          .from("enderecos")
-          .select("*")
-          .eq("usuario_id", user.id)
-          .order("created_at", { ascending: false })
-          .limit(1)
-          .maybeSingle();
+      if (addressData) setAddress(addressData);
 
-        if (latestAddress) {
-          addressData = latestAddress;
-        }
-      }
-
-      if (addressError) {
-        console.log("Erro ao buscar endereço:", addressError.message);
-      }
-
-      if (addressData) {
-        setAddress(addressData);
-      }
     } catch (error) {
       console.log("Erro geral:", error);
     } finally {
@@ -133,8 +103,7 @@ export default function ProfileScreen({ navigation }) {
   const handleShare = async () => {
     try {
       await Share.share({
-        message:
-          "Conecta Coleta - O melhor app de gestão de resíduos de Recife!",
+        message: "Conecta Coleta - O melhor app de gestão de resíduos de Recife!",
       });
     } catch (error) {
       console.log(error.message);
@@ -149,19 +118,20 @@ export default function ProfileScreen({ navigation }) {
     );
   }
 
-  // Monta a string do endereço
+  // --- Monta a string do endereço com CEP ---
   let fullAddress = "Endereço não cadastrado";
   if (address) {
-    // Se tiver rua, numero e bairro separados
-    if (address.numero && address.bairro) {
+    // Se tiver CEP, mostra ele primeiro
+    const cepPart = address.cep && address.cep !== '00000-000' ? `CEP: ${address.cep}\n` : "";
+    
+    if (address.numero || address.bairro) {
       const r = address.rua || "";
       const n = address.numero ? `, ${address.numero}` : "";
       const b = address.bairro ? ` - ${address.bairro}` : "";
-      fullAddress = `${r}${n}${b}`;
-    }
-    // Se o endereço foi salvo tudo junto no campo 'rua' (Comportamento do novo cadastro)
+      fullAddress = `${cepPart}${r}${n}${b}`;
+    } 
     else if (address.rua) {
-      fullAddress = address.rua;
+      fullAddress = `${cepPart}${address.rua}`;
     }
   }
 
@@ -213,37 +183,22 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.infoTitle}>Informações de Contato</Text>
 
           <View style={styles.infoRow}>
-            <Ionicons
-              name="mail-outline"
-              size={20}
-              color="#666"
-              style={styles.infoIcon}
-            />
+            <Ionicons name="mail-outline" size={20} color="#666" style={styles.infoIcon} />
             <Text style={styles.infoText} numberOfLines={1}>
               {profile?.email}
             </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Ionicons
-              name="call-outline"
-              size={20}
-              color="#666"
-              style={styles.infoIcon}
-            />
+            <Ionicons name="call-outline" size={20} color="#666" style={styles.infoIcon} />
             <Text style={styles.infoText}>
               {formatPhone(profile?.telefone)}
             </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Ionicons
-              name="location-outline"
-              size={20}
-              color="#666"
-              style={styles.infoIcon}
-            />
-            <Text style={styles.infoText} numberOfLines={2}>
+            <Ionicons name="location-outline" size={20} color="#666" style={styles.infoIcon} />
+            <Text style={styles.infoText} numberOfLines={3}>
               {fullAddress}
             </Text>
           </View>

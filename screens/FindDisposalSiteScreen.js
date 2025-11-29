@@ -7,7 +7,11 @@ import {
   TouchableOpacity,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import {
+  Ionicons,
+  MaterialCommunityIcons,
+  FontAwesome5,
+} from "@expo/vector-icons";
 
 const FindDisposalSiteScreen = ({ navigation }) => {
   // Função para navegar para a lista de Ecopontos com filtro
@@ -33,87 +37,103 @@ const FindDisposalSiteScreen = ({ navigation }) => {
       </View>
 
       <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-        {/* 1. Card Mapa de Ecopontos (Atalho Principal - Sem Filtro) */}
+        {/* 1. Card Mapa Geral (Sem Filtro) */}
         <TouchableOpacity
           style={styles.mapCard}
           onPress={() => goToEcopoints(null)}
         >
           <View style={styles.mapIconContainer}>
-            <Ionicons name="location-outline" size={28} color="#2ECC71" />
+            <Ionicons name="map" size={28} color="#00897B" />
           </View>
           <View style={styles.textContainer}>
-            <Text style={styles.cardTitle}>Mapa de Ecopontos</Text>
+            <Text style={styles.cardTitle}>Ver Mapa Completo</Text>
             <Text style={styles.cardSubtitle}>
-              Ver todos os pontos de coleta
+              Todos os Ecopontos e locais de reciclagem
             </Text>
           </View>
           <Ionicons name="chevron-forward" size={24} color="#CCC" />
         </TouchableOpacity>
 
         {/* 2. Grid de Tipos de Resíduos */}
-        <Text style={styles.sectionTitle}>Tipos de Resíduos</Text>
+        <Text style={styles.sectionTitle}>O que você deseja descartar?</Text>
         <View style={styles.gridContainer}>
+          {/* Materiais Recicláveis Gerais */}
+          <GridItem
+            label="Recicláveis Gerais"
+            subLabel="(Papel, Plástico, Metal, Vidro)"
+            icon="recycle"
+            iconLib={MaterialCommunityIcons}
+            color="#2ECC71" // Verde Reciclagem
+            onPress={() => goToEcopoints("Recicláveis")}
+          />
+
+          {/* Resíduos Especiais */}
           <GridItem
             label="Pilhas e Baterias"
             icon="battery-charging"
             iconLib={MaterialCommunityIcons}
-            color="#E53935"
+            color="#F57C00" // Laranja
             onPress={() => goToEcopoints("Pilhas")}
           />
+
           <GridItem
             label="Eletrônicos"
-            icon="cellphone"
+            icon="laptop"
             iconLib={MaterialCommunityIcons}
-            color="#F57C00"
+            color="#5C6BC0" // Azul Indigo
             onPress={() => goToEcopoints("Eletrônicos")}
           />
+
+          {/* ITEM DE ÓLEO REMOVIDO DAQUI */}
+
+          {/* Resíduos Volumosos e Obras (EcoEstações) */}
           <GridItem
-            label="Lâmpadas"
-            icon="lightbulb-on-outline"
+            label="Entulho e Metralha"
+            icon="dump-truck"
             iconLib={MaterialCommunityIcons}
-            color="#FBC02D"
-            onPress={() => goToEcopoints("Lâmpadas")}
+            color="#795548" // Marrom Terra
+            onPress={() => goToEcopoints("Entulho")}
           />
+
           <GridItem
-            label="Óleo de Cozinha"
-            icon="water-outline"
-            iconLib={Ionicons}
-            color="#FFA000"
-            onPress={() => goToEcopoints("Óleo")}
-          />
-          <GridItem
-            label="Recicláveis"
-            icon="recycle"
+            label="Móveis Velhos"
+            icon="sofa" // CORREÇÃO: Mudado de "couch" para "sofa"
             iconLib={MaterialCommunityIcons}
-            color="#2ECC71"
-            onPress={() => goToEcopoints("Recicláveis")}
+            color="#8D6E63" // Marrom Claro
+            onPress={() => goToEcopoints("Móveis")}
           />
+
           <GridItem
-            label="Orgânicos"
-            icon="leaf-outline"
-            iconLib={Ionicons}
-            color="#2E7D32"
-            onPress={() => goToEcopoints("Orgânicos")}
+            label="Podas e Madeira"
+            icon="tree"
+            iconLib={MaterialCommunityIcons}
+            color="#388E3C" // Verde Escuro
+            onPress={() => goToEcopoints("Poda")}
           />
         </View>
 
-        {/* 3. Card Benefícios */}
+        {/* 3. Card Informativo */}
         <TouchableOpacity
           style={styles.benefitsCard}
           onPress={() => navigation.navigate("RecyclingBenefits")}
         >
-          <Text style={styles.benefitsTitle}>Benefícios da Reciclagem</Text>
-          <BenefitItem text="Reduz a poluição ambiental" icon="leaf" />
-
-          {/* CORREÇÃO AQUI: Agora passamos iconLib={MaterialCommunityIcons} para a árvore funcionar */}
+          <Text style={styles.benefitsTitle}>Por que separar seu lixo?</Text>
           <BenefitItem
-            text="Economiza recursos naturais"
-            icon="tree"
-            iconLib={MaterialCommunityIcons}
+            text="Evita multas por descarte irregular"
+            icon="alert-circle-outline"
+            iconLib={Ionicons}
+            color="#D32F2F"
           />
-
-          <BenefitItem text="Gera economia de energia" icon="flash" />
-          <BenefitItem text="Cria empregos e renda" icon="briefcase" />
+          <BenefitItem
+            text="Gera renda para catadores"
+            icon="people-outline"
+            iconLib={Ionicons}
+          />
+          <BenefitItem
+            text="Preserva o meio ambiente"
+            icon="leaf-outline"
+            iconLib={Ionicons}
+          />
         </TouchableOpacity>
 
         <View style={{ height: 30 }} />
@@ -122,20 +142,41 @@ const FindDisposalSiteScreen = ({ navigation }) => {
   );
 };
 
-// Componentes Auxiliares
+// --- COMPONENTES AUXILIARES ---
 
-const GridItem = ({ label, icon, iconLib: IconLib, color, onPress }) => (
+const GridItem = ({
+  label,
+  subLabel,
+  icon,
+  iconLib: IconLib,
+  color,
+  onPress,
+}) => (
   <TouchableOpacity style={styles.gridItem} onPress={onPress}>
-    <IconLib name={icon} size={32} color={color} style={{ marginBottom: 10 }} />
+    <View style={[styles.iconCircle, { backgroundColor: color + "20" }]}>
+      <IconLib name={icon} size={32} color={color} />
+    </View>
     <Text style={styles.gridLabel}>{label}</Text>
+    {subLabel && <Text style={styles.gridSubLabel}>{subLabel}</Text>}
   </TouchableOpacity>
 );
 
-// CORREÇÃO NO COMPONENTE: Adicionei "iconLib" com valor padrão "Ionicons"
-const BenefitItem = ({ text, icon, iconLib: IconLib = Ionicons }) => (
+const BenefitItem = ({
+  text,
+  icon,
+  iconLib: IconLib = Ionicons,
+  color = "#2E7D32",
+}) => (
   <View style={styles.benefitRow}>
-    <IconLib name={icon} size={16} color="#2E7D32" style={{ marginRight: 8 }} />
-    <Text style={styles.benefitText}>{text}</Text>
+    <IconLib name={icon} size={18} color={color} style={{ marginRight: 8 }} />
+    <Text
+      style={[
+        styles.benefitText,
+        { color: color === "#D32F2F" ? color : "#1B5E20" },
+      ]}
+    >
+      {text}
+    </Text>
   </View>
 );
 
@@ -171,12 +212,14 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.05,
     shadowRadius: 3,
     shadowOffset: { width: 0, height: 2 },
+    borderWidth: 1,
+    borderColor: "#E0F2F1",
   },
   mapIconContainer: {
     width: 50,
     height: 50,
     borderRadius: 25,
-    backgroundColor: "#E8F5E9",
+    backgroundColor: "#E0F2F1",
     justifyContent: "center",
     alignItems: "center",
     marginRight: 15,
@@ -198,10 +241,11 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   gridItem: {
-    width: "48%",
+    width: "48%", // 2 colunas
     backgroundColor: "white",
     borderRadius: 15,
-    paddingVertical: 25,
+    paddingVertical: 20,
+    paddingHorizontal: 10,
     alignItems: "center",
     marginBottom: 15,
     elevation: 2,
@@ -212,11 +256,25 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: "#F0F0F0",
   },
+  iconCircle: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 10,
+  },
   gridLabel: {
     fontSize: 14,
     color: "#333",
-    fontWeight: "600",
+    fontWeight: "bold",
     textAlign: "center",
+  },
+  gridSubLabel: {
+    fontSize: 11,
+    color: "#888",
+    textAlign: "center",
+    marginTop: 2,
   },
 
   // Benefícios
@@ -235,7 +293,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
   },
   benefitRow: { flexDirection: "row", alignItems: "center", marginBottom: 8 },
-  benefitText: { fontSize: 14, color: "#1B5E20" },
+  benefitText: { fontSize: 14, fontWeight: "500" },
 });
 
 export default FindDisposalSiteScreen;
