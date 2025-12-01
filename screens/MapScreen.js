@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from "react";
+import React, { useState, useEffect, useRef, useMemo, useCallback } from "react";
 import {
   View,
   Text,
@@ -17,14 +17,30 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../utils/supabaseClient";
 import * as Location from "expo-location";
+import { useFocusEffect } from "@react-navigation/native";
 
-// --- CONSTANTES ---
+// --- CONSTANTES & TEMA ---
 const CYCLE_MINUTES = 20;
+
+const THEME = {
+  citizen: {
+    primary: "#007BFF",
+    route: "#007BFF",
+    truck: "#007BFF",
+    markerBg: "#E3F2FD",
+  },
+  company: {
+    primary: "#F0B90B", // Amarelo da marca
+    route: "#FF8F00",   // Laranja escuro para contraste no mapa
+    truck: "#EF6C00",   // Laranja vibrante para o caminhão
+    markerBg: "#FFF8E1",
+  }
+};
 
 // Função Haversine para calcular distância real em KM
 const getDistanceKm = (lat1, lon1, lat2, lon2) => {
   if (!lat1 || !lon1 || !lat2 || !lon2) return 0;
-  const R = 6371; // Raio da Terra
+  const R = 6371;
   const dLat = (lat2 - lat1) * (Math.PI / 180);
   const dLon = (lon2 - lon1) * (Math.PI / 180);
   const a =
@@ -142,9 +158,8 @@ const FALLBACK_ROUTE = [
   { latitude: -8.1145, longitude: -34.896 },
 ];
 
-// --- LISTA EXPANDIDA DE ECOPONTOS E RECICLAGEM (Baseada na busca real) ---
 const FIXED_POINTS = [
-  // ECOPONTOS (Oficiais da Prefeitura/Emlurb)
+  // ECOPONTOS
   {
     id: 1,
     type: "ecoponto",
@@ -158,7 +173,7 @@ const FIXED_POINTS = [
     id: 2,
     type: "ecoponto",
     title: "EcoEstação Imbiribeira",
-    address: "Av. Mascarenhas de Morais (ao lado do Viaduto Tancredo Neves)",
+    address: "Av. Mascarenhas de Morais",
     hours: "Seg-Sáb: 8h-16h",
     coords: { latitude: -8.113, longitude: -34.912 },
     materials: ["Entulho", "Poda", "Recicláveis"],
@@ -167,7 +182,7 @@ const FIXED_POINTS = [
     id: 3,
     type: "ecoponto",
     title: "EcoEstação Ibura",
-    address: "Rua Rio Tapado (prox. BR-101) - Ibura",
+    address: "Rua Rio Tapado - Ibura",
     hours: "Seg-Sáb: 8h-16h",
     coords: { latitude: -8.131, longitude: -34.935 },
     materials: ["Entulho", "Poda", "Recicláveis"],
@@ -227,7 +242,7 @@ const FIXED_POINTS = [
     materials: ["Educação Ambiental", "Recicláveis Leves"],
   },
 
-  // PONTOS DE ENTREGA VOLUNTÁRIA (Shoppings/Mercados - Reciclagem)
+  // RECICLAGEM
   {
     id: 20,
     type: "reciclagem",
@@ -255,12 +270,11 @@ const FIXED_POINTS = [
     coords: { latitude: -8.086, longitude: -34.895 },
     materials: ["Eletrônicos", "Recicláveis Gerais"],
   },
-  // ENDEREÇO CORRIGIDO AQUI:
   {
     id: 23,
     type: "reciclagem",
     title: "Atacadão Casa Amarela",
-    address: "R. Paula Batista, 680 - Casa Amarela, Recife - PE, 52070-070",
+    address: "R. Paula Batista, 680 - Casa Amarela",
     hours: "Seg-Sáb: 7h-21h",
     coords: { latitude: -8.028, longitude: -34.92 },
     materials: ["Pilhas", "Baterias"],
@@ -274,14 +288,13 @@ export default function MapScreen({ navigation }) {
   const [truckRoute, setTruckRoute] = useState(FALLBACK_ROUTE);
   const [currentTruckPos, setCurrentTruckPos] = useState(FALLBACK_ROUTE[0]);
   const [userAddress, setUserAddress] = useState("");
-
+  
   const [showFilters, setShowFilters] = useState(false);
   const [selectedPoint, setSelectedPoint] = useState(null);
   const [loadingLocation, setLoadingLocation] = useState(true);
 
-  // Estado para o Modal de Lista
   const [listModalVisible, setListModalVisible] = useState(false);
-  const [listModalType, setListModalType] = useState(null); // 'ecoponto' ou 'reciclagem'
+  const [listModalType, setListModalType] = useState(null);
 
   const [filters, setFilters] = useState({
     ecoponto: true,
@@ -289,11 +302,101 @@ export default function MapScreen({ navigation }) {
     caminhao: true,
   });
 
-  // --- MEMO: Processamento Inteligente dos Pontos ---
+  // ESTADO DO TEMA (Cidadão vs Empresa)
+  const [isCompany, setIsCompany] = useState(false);
+  const theme = isCompany ? THEME.company : THEME.citizen;
+
+  // --- CARREGAMENTO DE DADOS (CORRIGIDO COM USEFOCUS) ---
+  useFocusEffect(
+    useCallback(() => {
+      loadMapData();
+    }, [])
+  );
+
+  const loadMapData = async () => {
+    setLoadingLocation(true);
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+
+      if (user) {
+        // 1. Verifica tipo de usuário para o Tema
+        const { data: userData } = await supabase
+            .from('usuarios')
+            .select('tipo_usuario')
+            .eq('usuario_id', user.id)
+            .single();
+        
+        if (userData && userData.tipo_usuario === 'CNPJ') {
+            setIsCompany(true);
+        } else {
+            setIsCompany(false);
+        }
+
+        // 2. Busca endereço PADRÃO ou MAIS RECENTE
+        const { data: addressData } = await supabase
+          .from("enderecos")
+          .select("*")
+          .eq("usuario_id", user.id)
+          .order('created_at', { ascending: false }) // Pega sempre o mais novo se houver multiplos
+          .limit(1)
+          .maybeSingle();
+
+        if (addressData) {
+          setUserAddress(`${addressData.rua}, ${addressData.numero}`);
+          const fullAddr = `${addressData.rua}, ${addressData.numero}, ${addressData.bairro}, Recife`;
+
+          // Geocoding
+          const geocoded = await Location.geocodeAsync(fullAddr);
+
+          if (geocoded.length > 0) {
+            const { latitude, longitude } = geocoded[0];
+            const newLocation = {
+                latitude,
+                longitude,
+                latitudeDelta: 0.02,
+                longitudeDelta: 0.02,
+            };
+            setUserLocation(newLocation);
+            
+            // Centraliza o mapa na nova localização
+            if(mapRef.current) {
+                mapRef.current.animateToRegion(newLocation, 1000);
+            }
+
+            await fetchStreetRoute(latitude, longitude);
+            setLoadingLocation(false);
+            return; // Sucesso com endereço do banco
+          }
+        }
+      }
+
+      // Fallback: GPS Atual se não tiver endereço ou falhar geocoding
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        let location = await Location.getCurrentPositionAsync({});
+        const gpsLocation = {
+            latitude: location.coords.latitude,
+            longitude: location.coords.longitude,
+            latitudeDelta: 0.02,
+            longitudeDelta: 0.02,
+        };
+        setUserLocation(gpsLocation);
+        if(mapRef.current) {
+            mapRef.current.animateToRegion(gpsLocation, 1000);
+        }
+        await fetchStreetRoute(location.coords.latitude, location.coords.longitude);
+      }
+      setLoadingLocation(false);
+
+    } catch (error) {
+      console.log("Erro setup mapa:", error);
+      setLoadingLocation(false);
+    }
+  };
+
   const processedPoints = useMemo(() => {
     if (!userLocation) return { ecopontos: [], reciclagem: [] };
 
-    // Calcula a distância de todos os pontos
     const pointsWithDistance = FIXED_POINTS.map((p) => ({
       ...p,
       distance: getDistanceKm(
@@ -302,7 +405,7 @@ export default function MapScreen({ navigation }) {
         p.coords.latitude,
         p.coords.longitude
       ),
-    })).sort((a, b) => a.distance - b.distance); // Ordena do mais perto para o longe
+    })).sort((a, b) => a.distance - b.distance);
 
     return {
       ecopontos: pointsWithDistance.filter((p) => p.type === "ecoponto"),
@@ -310,29 +413,17 @@ export default function MapScreen({ navigation }) {
     };
   }, [userLocation]);
 
-  // Dados para os Cards
-  const nearestReciclagem =
-    processedPoints.reciclagem.length > 0
-      ? processedPoints.reciclagem[0]
-      : null;
-  const nearestReciclagemDist = nearestReciclagem
-    ? `${nearestReciclagem.distance.toFixed(1)} km`
-    : "-- km";
+  const nearestReciclagem = processedPoints.reciclagem.length > 0 ? processedPoints.reciclagem[0] : null;
+  const nearestReciclagemDist = nearestReciclagem ? `${nearestReciclagem.distance.toFixed(1)} km` : "-- km";
 
-  const nearestEcoponto =
-    processedPoints.ecopontos.length > 0 ? processedPoints.ecopontos[0] : null;
-  const nearestEcopontoDist = nearestEcoponto
-    ? `${nearestEcoponto.distance.toFixed(1)} km`
-    : "-- km";
+  const nearestEcoponto = processedPoints.ecopontos.length > 0 ? processedPoints.ecopontos[0] : null;
+  const nearestEcopontoDist = nearestEcoponto ? `${nearestEcoponto.distance.toFixed(1)} km` : "-- km";
   const ecopontosCount = processedPoints.ecopontos.length;
 
-  // --- FUNÇÕES ---
+  // --- FUNÇÕES AUXILIARES ---
 
   const openGoogleMaps = (lat, lng, label) => {
-    const scheme = Platform.select({
-      ios: "maps:0,0?q=",
-      android: "geo:0,0?q=",
-    });
+    const scheme = Platform.select({ ios: "maps:0,0?q=", android: "geo:0,0?q=" });
     const latLng = `${lat},${lng}`;
     const labelEncoded = encodeURIComponent(label);
     const url = Platform.select({
@@ -341,17 +432,10 @@ export default function MapScreen({ navigation }) {
     });
     const webUrl = `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`;
 
-    Linking.canOpenURL(url)
-      .then((supported) => {
-        if (supported) {
-          Linking.openURL(url);
-        } else {
-          Linking.openURL(webUrl);
-        }
-      })
-      .catch(() => {
-        Linking.openURL(webUrl);
-      });
+    Linking.canOpenURL(url).then((supported) => {
+      if (supported) Linking.openURL(url);
+      else Linking.openURL(webUrl);
+    }).catch(() => Linking.openURL(webUrl));
   };
 
   const calculateTruckPosition = (route) => {
@@ -377,10 +461,7 @@ export default function MapScreen({ navigation }) {
 
       if (json.routes && json.routes.length > 0) {
         const coordinates = json.routes[0].geometry.coordinates.map(
-          (coord) => ({
-            latitude: coord[1],
-            longitude: coord[0],
-          })
+          (coord) => ({ latitude: coord[1], longitude: coord[0] })
         );
         if (coordinates.length > 0) {
           setTruckRoute(coordinates);
@@ -391,64 +472,6 @@ export default function MapScreen({ navigation }) {
       console.log("Erro ao buscar rota:", error);
     }
   };
-
-  useEffect(() => {
-    (async () => {
-      try {
-        const {
-          data: { user },
-        } = await supabase.auth.getUser();
-
-        if (user) {
-          const { data: addressData } = await supabase
-            .from("enderecos")
-            .select("*")
-            .eq("usuario_id", user.id)
-            .eq("is_padrao", true)
-            .maybeSingle();
-
-          if (addressData) {
-            setUserAddress(`${addressData.rua}, ${addressData.numero}`);
-            const fullAddr = `${addressData.rua}, ${addressData.numero}, ${addressData.bairro}, Recife`;
-
-            const geocoded = await Location.geocodeAsync(fullAddr);
-
-            if (geocoded.length > 0) {
-              const { latitude, longitude } = geocoded[0];
-              setUserLocation({
-                latitude,
-                longitude,
-                latitudeDelta: 0.02,
-                longitudeDelta: 0.02,
-              });
-              await fetchStreetRoute(latitude, longitude);
-              setLoadingLocation(false);
-              return;
-            }
-          }
-        }
-
-        let { status } = await Location.requestForegroundPermissionsAsync();
-        if (status === "granted") {
-          let location = await Location.getCurrentPositionAsync({});
-          setUserLocation({
-            latitude: location.coords.latitude,
-            longitude: location.coords.longitude,
-            latitudeDelta: 0.02,
-            longitudeDelta: 0.02,
-          });
-          await fetchStreetRoute(
-            location.coords.latitude,
-            location.coords.longitude
-          );
-        }
-        setLoadingLocation(false);
-      } catch (error) {
-        console.log("Erro setup mapa:", error);
-        setLoadingLocation(false);
-      }
-    })();
-  }, []);
 
   useEffect(() => {
     const interval = setInterval(() => {
@@ -500,7 +523,7 @@ export default function MapScreen({ navigation }) {
       case "reciclagem":
         return (
           <MarkerIcon
-            color="#007BFF"
+            color={theme.primary} // Usa cor do tema
             icon="recycle"
             library="MaterialCommunityIcons"
           />
@@ -510,7 +533,6 @@ export default function MapScreen({ navigation }) {
     }
   };
 
-  // Abre o modal de lista
   const handleOpenList = (type) => {
     setListModalType(type);
     setListModalVisible(true);
@@ -533,7 +555,7 @@ export default function MapScreen({ navigation }) {
         <View style={styles.mapWrapper}>
           {loadingLocation && (
             <View style={styles.mapLoadingOverlay}>
-              <ActivityIndicator size="large" color="#00A859" />
+              <ActivityIndicator size="large" color={theme.primary} />
               <Text style={{ marginTop: 10, color: "#555" }}>
                 Localizando seu endereço...
               </Text>
@@ -563,14 +585,14 @@ export default function MapScreen({ navigation }) {
             {filters.caminhao && truckRoute.length > 1 && (
               <Polyline
                 coordinates={truckRoute}
-                strokeColor="#007BFF"
+                strokeColor={theme.route} // COR DA ROTA DINÂMICA
                 strokeWidth={4}
               />
             )}
 
             {userLocation && (
               <Marker coordinate={userLocation} title="Seu Endereço">
-                <View style={styles.homeMarker}>
+                <View style={[styles.homeMarker, { backgroundColor: '#FF5722' }]}>
                   <Ionicons name="home" size={16} color="white" />
                 </View>
               </Marker>
@@ -600,7 +622,7 @@ export default function MapScreen({ navigation }) {
                 }
                 anchor={{ x: 0.5, y: 0.5 }}
               >
-                <View style={styles.optimizedTruckMarker}>
+                <View style={[styles.optimizedTruckMarker, { backgroundColor: theme.truck }]}>
                   <MaterialCommunityIcons
                     name="truck-delivery"
                     size={22}
@@ -613,14 +635,14 @@ export default function MapScreen({ navigation }) {
 
           <View style={styles.legendCard}>
             <LegendItem color="#2ECC71" text="Ecopontos" />
-            <LegendItem color="#007BFF" text="Reciclagem" />
+            <LegendItem color={theme.primary} text="Reciclagem" />
           </View>
 
           <View style={styles.floatingButtons}>
             <TouchableOpacity
               style={[
                 styles.circleBtn,
-                showFilters && { backgroundColor: "#007BFF" },
+                showFilters && { backgroundColor: theme.primary },
               ]}
               onPress={() => setShowFilters(!showFilters)}
             >
@@ -669,14 +691,14 @@ export default function MapScreen({ navigation }) {
                 label="Reciclagem"
                 active={filters.reciclagem}
                 onPress={() => toggleFilter("reciclagem")}
-                color="#007BFF"
+                color={theme.primary}
                 icon="recycle"
               />
               <FilterChip
                 label="Caminhão"
                 active={filters.caminhao}
                 onPress={() => toggleFilter("caminhao")}
-                color="#007BFF"
+                color={theme.truck}
                 icon="truck"
               />
             </View>
@@ -688,15 +710,15 @@ export default function MapScreen({ navigation }) {
           onPress={handleCenterOnTruck}
         >
           <View style={styles.truckHeader}>
-            <View style={styles.truckIconBg}>
+            <View style={[styles.truckIconBg, { backgroundColor: theme.markerBg }]}>
               <MaterialCommunityIcons
                 name="truck-outline"
                 size={24}
-                color="#007BFF"
+                color={theme.truck}
               />
             </View>
             <View>
-              <Text style={styles.truckTitle}>
+              <Text style={[styles.truckTitle, { color: theme.truck }]}>
                 Caminhão próximo ao seu endereço
               </Text>
               <Text style={styles.truckSubtitle}>Seguindo rota oficial</Text>
@@ -718,7 +740,6 @@ export default function MapScreen({ navigation }) {
 
         <Text style={styles.sectionTitle}>Pontos de Coleta Próximos</Text>
 
-        {/* CARDS AGORA SÃO BOTÕES (TouchableOpacity) */}
         <View style={styles.pointsRow}>
           <PointCard
             label="Ecopontos"
@@ -734,13 +755,13 @@ export default function MapScreen({ navigation }) {
             sub="Shoppings e Mercados"
             extra={`+ Perto: ${nearestReciclagemDist}`}
             icon="sync"
-            color="#007BFF"
-            bgColor="#E3F2FD"
+            color={theme.primary}
+            bgColor={theme.markerBg}
             onPress={() => handleOpenList("reciclagem")}
           />
         </View>
 
-        {/* --- MODAL DE LISTA (NOVO) --- */}
+        {/* --- MODAL DE LISTA --- */}
         <Modal
           animationType="slide"
           transparent={true}
@@ -776,7 +797,7 @@ export default function MapScreen({ navigation }) {
                         name={listModalType === "ecoponto" ? "leaf" : "sync"}
                         size={24}
                         color={
-                          listModalType === "ecoponto" ? "#2ECC71" : "#007BFF"
+                          listModalType === "ecoponto" ? "#2ECC71" : theme.primary
                         }
                       />
                     </View>
@@ -790,7 +811,7 @@ export default function MapScreen({ navigation }) {
                       </View>
                     </View>
                     <TouchableOpacity
-                      style={styles.listItemButton}
+                      style={[styles.listItemButton, { backgroundColor: theme.primary }]}
                       onPress={() =>
                         openGoogleMaps(
                           item.coords.latitude,
@@ -823,7 +844,7 @@ export default function MapScreen({ navigation }) {
           </View>
         </Modal>
 
-        {/* --- MODAL DE DETALHES DO MAPA --- */}
+        {/* --- MODAL DE DETALHES --- */}
         <Modal
           animationType="slide"
           transparent={true}
@@ -859,7 +880,7 @@ export default function MapScreen({ navigation }) {
                       flexDirection: "row",
                       alignItems: "center",
                       marginTop: 15,
-                      backgroundColor: "#E3F2FD",
+                      backgroundColor: theme.markerBg,
                       padding: 10,
                       borderRadius: 8,
                     }}
@@ -867,10 +888,10 @@ export default function MapScreen({ navigation }) {
                     <MaterialCommunityIcons
                       name="speedometer"
                       size={20}
-                      color="#007BFF"
+                      color={theme.primary}
                       style={{ marginRight: 8 }}
                     />
-                    <Text style={{ fontWeight: "bold", color: "#007BFF" }}>
+                    <Text style={{ fontWeight: "bold", color: theme.primary }}>
                       Velocidade Média: 20 km/h
                     </Text>
                   </View>
@@ -885,7 +906,7 @@ export default function MapScreen({ navigation }) {
                     <InfoRow
                       icon="time-outline"
                       text={selectedPoint.hours}
-                      color="#007BFF"
+                      color={theme.primary}
                     />
                   )}
                   {selectedPoint?.materials && (
@@ -917,7 +938,7 @@ export default function MapScreen({ navigation }) {
                   )}
 
                   <TouchableOpacity
-                    style={styles.modalButton}
+                    style={[styles.modalButton, { backgroundColor: theme.primary }]}
                     onPress={() =>
                       openGoogleMaps(
                         selectedPoint.coords.latitude,
@@ -1129,7 +1150,7 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    backgroundColor: "#007BFF",
+    // Background color is dynamic
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
@@ -1154,12 +1175,12 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderRadius: 22.5,
-    backgroundColor: "#E3F2FD",
+    // Background color is dynamic
     justifyContent: "center",
     alignItems: "center",
     marginRight: 15,
   },
-  truckTitle: { fontSize: 16, fontWeight: "bold", color: "#0D47A1" },
+  truckTitle: { fontSize: 16, fontWeight: "bold" },
   truckSubtitle: { fontSize: 13, color: "#666" },
   timeContainer: {
     flexDirection: "row",
@@ -1247,7 +1268,7 @@ const styles = StyleSheet.create({
   popupTitle: { fontSize: 20, fontWeight: "bold", color: "#333", width: "85%" },
   popupText: { fontSize: 15, color: "#555", lineHeight: 22 },
   modalButton: {
-    backgroundColor: "#007BFF",
+    // Background color is dynamic
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: "center",
@@ -1309,7 +1330,7 @@ const styles = StyleSheet.create({
   listItemDistanceText: { fontSize: 11, fontWeight: "bold", color: "#2E7D32" },
   listItemButton: {
     padding: 10,
-    backgroundColor: "#007BFF",
+    // Background color is dynamic
     borderRadius: 10,
     marginLeft: 10,
   },

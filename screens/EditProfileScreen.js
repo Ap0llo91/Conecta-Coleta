@@ -18,9 +18,16 @@ import { supabase } from '../utils/supabaseClient';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
 
+// Cores do tema
+const THEME = {
+  citizen: { primary: "#007BFF" },
+  company: { primary: "#F0B90B" }
+};
+
 export default function EditProfileScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [isCompany, setIsCompany] = useState(false);
 
   // Estados do Perfil
   const [nome, setNome] = useState('');
@@ -36,6 +43,9 @@ export default function EditProfileScreen({ navigation }) {
   const [cep, setCep] = useState('');
   const [addressId, setAddressId] = useState(null);
 
+  // Define a cor primária
+  const primaryColor = isCompany ? THEME.company.primary : THEME.citizen.primary;
+
   // --- MÁSCARAS ---
   const applyPhoneMask = (text) => {
     let v = text.replace(/\D/g, "");
@@ -50,6 +60,24 @@ export default function EditProfileScreen({ navigation }) {
       if (v.length > 0) v = v.replace(/^(\d*)/, "($1");
     }
     return v;
+  };
+
+  // NOVA MÁSCARA PARA DOCUMENTO (CPF ou CNPJ)
+  const applyDocumentMask = (text) => {
+    if (!text) return "";
+    const cleaned = text.replace(/\D/g, "");
+    
+    // CPF (até 11 dígitos)
+    if (cleaned.length <= 11) {
+      return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
+    } 
+    // CNPJ (mais de 11 dígitos)
+    else {
+      return cleaned.replace(
+        /(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/,
+        "$1.$2.$3/$4-$5"
+      );
+    }
   };
 
   const handlePhoneChange = (text) => {
@@ -77,7 +105,6 @@ export default function EditProfileScreen({ navigation }) {
 
   const fillAddressFields = (data) => {
       if (!data) return;
-      console.log("Preenchendo endereço na tela:", data);
       setAddressId(data.id);
 
       // CEP
@@ -130,7 +157,7 @@ export default function EditProfileScreen({ navigation }) {
           return;
       }
 
-      // 1. Busca Dados Pessoais
+      // 1. Busca Dados Pessoais e Tipo
       const { data: profile } = await supabase
         .from('usuarios')
         .select('*') 
@@ -138,10 +165,17 @@ export default function EditProfileScreen({ navigation }) {
         .single();
 
       if (profile) {
+        // Detecta se é empresa
+        if (profile.tipo_usuario === 'CNPJ') setIsCompany(true);
+        else setIsCompany(false);
+
         setNome(profile.nome_razao_social || '');
         if (profile.telefone) setTelefone(applyPhoneMask(profile.telefone));
         setEmail(profile.email || '');
-        setCpf(profile.cpf_cnpj || '');
+        
+        // APLICA A MÁSCARA AO CARREGAR O CPF/CNPJ
+        setCpf(applyDocumentMask(profile.cpf_cnpj || ''));
+        
         if (profile.foto_url) setImageUri(profile.foto_url);
       }
 
@@ -149,7 +183,6 @@ export default function EditProfileScreen({ navigation }) {
       let finalAddress = null;
 
       try {
-        // Tenta a busca ideal (pelo mais recente)
         const { data: latest, error: sortError } = await supabase
             .from('enderecos')
             .select('*')
@@ -162,9 +195,6 @@ export default function EditProfileScreen({ navigation }) {
         finalAddress = latest;
 
       } catch (sortErr) {
-        console.log("Erro na busca ordenada (provavel falta de created_at):", sortErr.message);
-        
-        // PLANO B: Busca simples (pega qualquer um para não ficar em branco)
         const { data: fallback } = await supabase
             .from('enderecos')
             .select('*')
@@ -177,8 +207,6 @@ export default function EditProfileScreen({ navigation }) {
 
       if (finalAddress) {
           fillAddressFields(finalAddress);
-      } else {
-          console.log("Nenhum endereço encontrado.");
       }
 
     } catch (error) {
@@ -279,7 +307,7 @@ export default function EditProfileScreen({ navigation }) {
   if (loading) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color="#007BFF" />
+        <ActivityIndicator size="large" color={primaryColor} />
       </View>
     );
   }
@@ -293,9 +321,9 @@ export default function EditProfileScreen({ navigation }) {
         <Text style={styles.headerTitle}>Editar Informações</Text>
         <TouchableOpacity onPress={handleSave} disabled={saving}>
           {saving ? (
-            <ActivityIndicator size="small" color="#007BFF" />
+            <ActivityIndicator size="small" color={primaryColor} />
           ) : (
-            <Text style={styles.saveButtonText}>Salvar</Text>
+            <Text style={[styles.saveButtonText, { color: primaryColor }]}>Salvar</Text>
           )}
         </TouchableOpacity>
       </View>
@@ -315,21 +343,21 @@ export default function EditProfileScreen({ navigation }) {
                   resizeMode="cover"
                 />
               ) : (
-                <View style={styles.avatarPlaceholder}>
+                <View style={[styles.avatarPlaceholder, { backgroundColor: isCompany ? '#F0B90B' : '#4285F4' }]}>
                   <Ionicons name="person" size={60} color="#FFF" />
                 </View>
               )}
-              <View style={styles.editIconBg}>
+              <View style={[styles.editIconBg, { backgroundColor: primaryColor }]}>
                 <Ionicons name="camera" size={18} color="#FFF" />
               </View>
             </TouchableOpacity>
             <TouchableOpacity onPress={handlePhotoOptions}>
-              <Text style={styles.changePhotoText}>Toque para alterar foto</Text>
+              <Text style={[styles.changePhotoText, { color: primaryColor }]}>Toque para alterar foto</Text>
             </TouchableOpacity>
           </View>
 
           <Text style={styles.sectionTitle}>Dados Pessoais</Text>
-          <Text style={styles.label}>Nome Completo</Text>
+          <Text style={styles.label}>Nome / Razão Social</Text>
           <TextInput 
             style={styles.input} 
             value={nome} 
@@ -354,10 +382,10 @@ export default function EditProfileScreen({ navigation }) {
             editable={false} 
           />
 
-          <Text style={styles.label}>CPF / CNPJ (Não editável)</Text>
+          <Text style={styles.label}>{isCompany ? "CNPJ" : "CPF"} (Não editável)</Text>
           <TextInput 
             style={[styles.input, styles.disabledInput]} 
-            value={cpf} 
+            value={cpf} // Agora o valor vem formatado
             editable={false} 
           />
 
@@ -423,7 +451,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F0F0F0',
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  saveButtonText: { fontSize: 16, color: '#007BFF', fontWeight: 'bold' },
+  saveButtonText: { fontSize: 16, fontWeight: 'bold' }, // Cor via style dinâmico
   content: { padding: 20 },
   avatarSection: { alignItems: 'center', marginBottom: 30 },
   avatarContainer: { 
@@ -451,18 +479,16 @@ const styles = StyleSheet.create({
   avatarPlaceholder: {
     width: 110,
     height: 110, 
-    borderRadius: 55,
-    backgroundColor: '#4285F4', 
+    borderRadius: 55, 
     justifyContent: 'center',
     alignItems: 'center',
-    borderWidth: 3,
+    borderWidth: 3, 
     borderColor: '#FFF',
   },
   editIconBg: {
     position: 'absolute',
     bottom: 0,
     right: 0,
-    backgroundColor: '#007BFF',
     width: 32,
     height: 32,
     borderRadius: 16,
@@ -471,7 +497,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFF',
   },
-  changePhotoText: { color: '#007BFF', fontSize: 15, fontWeight: '600' },
+  changePhotoText: { fontSize: 15, fontWeight: '600' }, // Cor via style dinâmico
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 15 },
   label: { fontSize: 14, color: '#666', marginBottom: 5, marginTop: 10 },
   input: {

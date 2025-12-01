@@ -9,65 +9,145 @@ import {
   Modal, 
   ActivityIndicator, 
   Alert,
-  KeyboardAvoidingView, // <--- Importado
-  Platform // <--- Importado
+  KeyboardAvoidingView,
+  Platform
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons } from '@expo/vector-icons';
 import * as Location from 'expo-location';
 
+// Importação do Supabase
+import { supabase } from "../utils/supabaseClient";
+
 const RequestUncollectedScreen = ({ navigation }) => {
   const [loadingLocation, setLoadingLocation] = useState(false);
+  const [loading, setLoading] = useState(false);
   
   // Estados do Formulário
   const [endereco, setEndereco] = useState('');
+  const [coords, setCoords] = useState(null);
   const [tipoLixo, setTipoLixo] = useState('');
   const [dataColeta, setDataColeta] = useState('');
   const [horario, setHorario] = useState('');
   const [descricao, setDescricao] = useState('');
 
-  // Estado para o Modal de Tipo de Lixo
-  const [modalVisible, setModalVisible] = useState(false);
+  // Estados dos Modais
+  const [modalTipoVisible, setModalTipoVisible] = useState(false);
+  const [modalTimeVisible, setModalTimeVisible] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  
+  // --- NOVOS ESTADOS PARA O ALERTA BONITO ---
+  const [alertModalVisible, setAlertModalVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState("warning"); // 'warning' ou 'error'
 
-  // Opções do Dropdown
   const tiposDeLixo = [
     "Lixo doméstico",
     "Lixo reciclável",
-    "Resíduo orgânico"
+    "Resíduo orgânico",
+    "Entulho pequeno",
+    "Outros"
   ];
 
-  // Função de Localização
+  // Função auxiliar para mostrar o alerta bonito
+  const showCustomAlert = (title, message, type = "warning") => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertModalVisible(true);
+  };
+
+  const formatDate = (text) => {
+    let v = text.replace(/\D/g, "");
+    if (v.length > 8) v = v.substring(0, 8);
+
+    if (v.length <= 2) {
+        setDataColeta(v);
+    } else if (v.length <= 4) {
+        setDataColeta(`${v.substring(0, 2)}/${v.substring(2)}`);
+    } else {
+        setDataColeta(`${v.substring(0, 2)}/${v.substring(2, 4)}/${v.substring(4)}`);
+    }
+  };
+
   const handleGetLocation = async () => {
     if (loadingLocation) return;
-
     let { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permissão negada', 'Não podemos pegar sua localização sem permissão.');
+      showCustomAlert('Permissão negada', 'Necessário para preencher o endereço.', 'error');
       return;
     }
-
     setLoadingLocation(true);
     try {
       let location = await Location.getCurrentPositionAsync({});
+      setCoords({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+      });
       let geocode = await Location.reverseGeocodeAsync(location.coords);
-      
       if (geocode.length > 0) {
         const g = geocode[0];
         const addressFormatted = `${g.street || ''}, ${g.streetNumber || ''}, ${g.subregion || ''}`;
         setEndereco(addressFormatted);
       } else {
-        Alert.alert('Erro', 'Não foi possível encontrar o endereço.');
+        showCustomAlert('Erro', 'Não foi possível encontrar o endereço.', 'error');
       }
     } catch (error) {
-      Alert.alert('Erro', 'Falha ao obter localização.');
+      showCustomAlert('Erro', 'Falha ao obter localização.', 'error');
     } finally {
       setLoadingLocation(false);
     }
   };
 
+  const handleEnviar = async () => {
+    // 1. Validação agora usa o alerta bonito
+    if (!endereco || !tipoLixo || !descricao) {
+        showCustomAlert("Campos Obrigatórios", "Por favor, preencha endereço, tipo de lixo e descrição.", "warning");
+        return;
+    }
+    setLoading(true);
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        if (!user) {
+            showCustomAlert("Sessão Expirada", "Faça login novamente.", "error");
+            setLoading(false);
+            return;
+        }
+
+        let descricaoFinal = `Tipo: ${tipoLixo}. Descrição: ${descricao}`;
+        if (dataColeta) descricaoFinal += `. Data prevista: ${dataColeta}`;
+        if (horario) descricaoFinal += `. Horário exposto: ${horario}`;
+
+        const { error } = await supabase
+            .from('chamados')
+            .insert({
+                usuario_id: user.id,
+                tipo_problema: 'Lixo Não Coletado',
+                descricao: descricaoFinal,
+                endereco_local: endereco,
+                latitude: coords ? coords.latitude : null,
+                longitude: coords ? coords.longitude : null,
+                status: 'Pendente'
+            });
+
+        if (error) throw error;
+        setSuccessModalVisible(true);
+    } catch (error) {
+        console.error("Erro ao enviar:", error);
+        showCustomAlert("Erro no Envio", "Não foi possível enviar a solicitação. Verifique sua conexão.", "error");
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const closeSuccessModal = () => {
+      setSuccessModalVisible(false);
+      navigation.goBack();
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Cabeçalho Vermelho */}
       <View style={styles.header}>
         <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
           <Ionicons name="arrow-back" size={24} color="white" />
@@ -77,14 +157,12 @@ const RequestUncollectedScreen = ({ navigation }) => {
         <Text style={styles.headerSubtitle}>Reporte lixo que não foi coletado</Text>
       </View>
 
-      {/* WRAPPER KEYBOARD AVOIDING VIEW ADICIONADO AQUI */}
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           
-          {/* Campo de Localização com GPS */}
           <Text style={styles.label}>Localização</Text>
           <View style={styles.addressContainer}>
             <TextInput 
@@ -102,57 +180,66 @@ const RequestUncollectedScreen = ({ navigation }) => {
             </TouchableOpacity>
           </View>
 
-          {/* Dropdown Tipo de Lixo */}
           <Text style={styles.label}>Tipo de Lixo</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => setModalVisible(true)}>
+          <TouchableOpacity style={styles.dropdown} onPress={() => setModalTipoVisible(true)}>
             <Text style={tipoLixo ? styles.inputText : styles.placeholderText}>
               {tipoLixo || "Selecione o tipo"}
             </Text>
             <Ionicons name="chevron-down" size={24} color="#666" />
           </TouchableOpacity>
 
-          <Text style={styles.label}>Data da Coleta Prevista</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="dd/mm/aaaa" 
-            value={dataColeta} 
-            onChangeText={setDataColeta} 
-          />
-
-          <Text style={styles.label}>Horário que foi exposto</Text>
-          <TextInput 
-            style={styles.input} 
-            placeholder="--:--" 
-            value={horario} 
-            onChangeText={setHorario} 
-          />
+          <View style={styles.row}>
+            <View style={{ flex: 1, marginRight: 10 }}>
+                <Text style={styles.label}>Data Prevista</Text>
+                <TextInput 
+                    style={styles.input} 
+                    placeholder="DD/MM/AAAA" 
+                    value={dataColeta} 
+                    onChangeText={formatDate} 
+                    keyboardType="numeric"
+                    maxLength={10}
+                />
+            </View>
+            <View style={{ flex: 1 }}>
+                <Text style={styles.label}>Horário Exposto</Text>
+                <TouchableOpacity onPress={() => setModalTimeVisible(true)}>
+                    <View style={[styles.input, { justifyContent: 'center' }]}>
+                        <Text style={horario ? styles.inputText : styles.placeholderText}>
+                            {horario || "--:--"}
+                        </Text>
+                    </View>
+                </TouchableOpacity>
+            </View>
+          </View>
 
           <Text style={styles.label}>Descrição da Situação</Text>
           <TextInput 
             style={[styles.input, styles.textArea]} 
-            placeholder="Descreva o problema: quantidade de lixo, há quanto tempo está exposto, etc." 
+            placeholder="Descreva o problema..." 
             multiline 
             numberOfLines={4} 
             value={descricao} 
             onChangeText={setDescricao} 
           />
 
-          {/* Placeholder de Foto */}
-          <Text style={styles.label}>Foto do Local (opcional)</Text>
-          <TouchableOpacity style={styles.photoBox} onPress={() => console.log("Abrir Câmera")}>
-             <Text style={styles.photoText}>Clique para adicionar foto</Text>
-          </TouchableOpacity>
-
-          <TouchableOpacity style={styles.submitButton} onPress={() => console.log('Enviando solicitação...')}>
-            <Text style={styles.submitButtonText}>Enviar Solicitação</Text>
+          <TouchableOpacity 
+            style={styles.submitButton} 
+            onPress={handleEnviar}
+            disabled={loading}
+          >
+            {loading ? (
+                <ActivityIndicator color="white" />
+            ) : (
+                <Text style={styles.submitButtonText}>Enviar Solicitação</Text>
+            )}
           </TouchableOpacity>
 
           <View style={{ height: 40 }} /> 
         </ScrollView>
       </KeyboardAvoidingView>
 
-      {/* Modal de Seleção */}
-      <Modal visible={modalVisible} animationType="slide" transparent={true}>
+      {/* Modal Tipo de Lixo */}
+      <Modal visible={modalTipoVisible} animationType="slide" transparent={true}>
         <View style={styles.modalContainer}>
           <View style={styles.modalContent}>
             <Text style={styles.modalTitle}>Tipo de Lixo</Text>
@@ -162,26 +249,136 @@ const RequestUncollectedScreen = ({ navigation }) => {
                 style={styles.modalItem} 
                 onPress={() => {
                   setTipoLixo(tipo);
-                  setModalVisible(false);
+                  setModalTipoVisible(false);
                 }}
               >
                 <Text style={styles.modalItemText}>{tipo}</Text>
               </TouchableOpacity>
             ))}
-            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setModalVisible(false)}>
+            <TouchableOpacity style={styles.modalCloseButton} onPress={() => setModalTipoVisible(false)}>
               <Text style={styles.modalCloseText}>Cancelar</Text>
             </TouchableOpacity>
           </View>
         </View>
       </Modal>
+
+      {/* Modal Time Picker */}
+      <TimePickerModal 
+        visible={modalTimeVisible} 
+        onClose={() => setModalTimeVisible(false)} 
+        onSelect={(h, m) => {
+            setHorario(`${h}:${m}`);
+            setModalTimeVisible(false);
+        }} 
+      />
+
+      {/* Modal de Sucesso */}
+      <Modal visible={successModalVisible} animationType="fade" transparent={true}>
+        <View style={styles.centerModalOverlay}>
+            <View style={styles.card}>
+                <Ionicons name="checkmark-circle" size={80} color="#4CAF50" style={{ marginBottom: 20 }} />
+                <Text style={styles.cardTitle}>Reporte Enviado!</Text>
+                <Text style={styles.cardMessage}>Agradecemos sua colaboração.</Text>
+                <TouchableOpacity style={[styles.cardButton, { backgroundColor: '#4CAF50' }]} onPress={closeSuccessModal}>
+                    <Text style={styles.cardButtonText}>Fechar</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+      </Modal>
+
+      {/* NOVO: Modal de Alerta/Erro Bonito (Genérico) */}
+      <Modal visible={alertModalVisible} animationType="fade" transparent={true}>
+        <View style={styles.centerModalOverlay}>
+            <View style={styles.card}>
+                <Ionicons 
+                  name={alertType === "error" ? "alert-circle" : "warning"} 
+                  size={80} 
+                  color={alertType === "error" ? "#D92D20" : "#FF9800"} 
+                  style={{ marginBottom: 20 }} 
+                />
+                <Text style={styles.cardTitle}>{alertTitle}</Text>
+                <Text style={styles.cardMessage}>{alertMessage}</Text>
+                <TouchableOpacity 
+                    style={[styles.cardButton, { backgroundColor: alertType === "error" ? "#D92D20" : "#FF9800" }]} 
+                    onPress={() => setAlertModalVisible(false)}
+                >
+                    <Text style={styles.cardButtonText}>OK</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
+};
+
+// Componente Time Picker
+const TimePickerModal = ({ visible, onClose, onSelect }) => {
+    return (
+        <Modal visible={visible} animationType="slide" transparent={true}>
+             <View style={styles.modalContainer}>
+                <View style={[styles.modalContent, { height: 400 }]}>
+                    <Text style={styles.modalTitle}>Selecione o Horário</Text>
+                    <SimpleTimeSelector onSelect={onSelect} onClose={onClose} />
+                </View>
+             </View>
+        </Modal>
+    );
+};
+
+const SimpleTimeSelector = ({ onSelect, onClose }) => {
+    const [selectedHour, setSelectedHour] = useState('12');
+    const [selectedMinute, setSelectedMinute] = useState('00');
+    
+    const hours = Array.from({ length: 24 }, (_, i) => String(i).padStart(2, '0'));
+    const minutes = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, '0')); 
+
+    return (
+        <View style={{ flex: 1, width: '100%' }}>
+            <View style={{ flexDirection: 'row', height: 200 }}>
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center' }} showsVerticalScrollIndicator={false}>
+                    {hours.map(h => (
+                        <TouchableOpacity 
+                            key={h} 
+                            onPress={() => setSelectedHour(h)}
+                            style={[styles.timeSlot, selectedHour === h && styles.timeSlotSelected]}
+                        >
+                            <Text style={[styles.timeText, selectedHour === h && styles.timeTextSelected]}>{h}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+                <View style={{ justifyContent: 'center' }}><Text style={{ fontSize: 30 }}>:</Text></View>
+                <ScrollView style={{ flex: 1 }} contentContainerStyle={{ alignItems: 'center' }} showsVerticalScrollIndicator={false}>
+                    {minutes.map(m => (
+                        <TouchableOpacity 
+                            key={m} 
+                            onPress={() => setSelectedMinute(m)}
+                            style={[styles.timeSlot, selectedMinute === m && styles.timeSlotSelected]}
+                        >
+                            <Text style={[styles.timeText, selectedMinute === m && styles.timeTextSelected]}>{m}</Text>
+                        </TouchableOpacity>
+                    ))}
+                </ScrollView>
+            </View>
+            <View style={{ flexDirection: 'row', marginTop: 20, justifyContent: 'space-between' }}>
+                <TouchableOpacity onPress={onClose} style={[styles.modalButton, { backgroundColor: '#EEE' }]}>
+                    <Text style={{ color: '#333' }}>Cancelar</Text>
+                </TouchableOpacity>
+                <TouchableOpacity 
+                    onPress={() => onSelect(selectedHour, selectedMinute)} 
+                    style={[styles.modalButton, { backgroundColor: '#D92D20' }]}
+                >
+                    <Text style={{ color: 'white', fontWeight: 'bold' }}>Confirmar</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+    );
 };
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F9F9F9' },
   header: {
-    backgroundColor: '#D92D20', // Vermelho
+    backgroundColor: '#D92D20',
     paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
@@ -226,28 +423,15 @@ const styles = StyleSheet.create({
   inputText: { fontSize: 16, color: '#333' },
   placeholderText: { fontSize: 16, color: '#999' },
   textArea: { height: 100, textAlignVertical: 'top' },
-
-  // Box da Foto
-  photoBox: {
-    backgroundColor: '#fff',
-    borderWidth: 2,
-    borderColor: '#e0e0e0',
-    borderStyle: 'dashed',
-    borderRadius: 10,
-    height: 100,
-    justifyContent: 'center',
-    alignItems: 'center',
-    marginTop: 5,
-    marginBottom: 20,
-  },
-  photoText: { color: '#aaa', fontSize: 14 },
+  
+  row: { flexDirection: 'row', gap: 15 },
 
   submitButton: {
-    backgroundColor: '#D92D20', // Vermelho
+    backgroundColor: '#D92D20',
     borderRadius: 12,
     paddingVertical: 16,
     alignItems: 'center',
-    marginTop: 10,
+    marginTop: 30,
     shadowColor: '#000',
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.2,
@@ -256,7 +440,7 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: 'white', fontSize: 18, fontWeight: 'bold' },
 
-  // Modal
+  // Modais Inferiores (Tipo de Lixo, Horário)
   modalContainer: { flex: 1, justifyContent: 'flex-end', backgroundColor: 'rgba(0,0,0,0.5)' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, padding: 20 },
   modalTitle: { fontSize: 18, fontWeight: 'bold', marginBottom: 15, textAlign: 'center' },
@@ -264,6 +448,21 @@ const styles = StyleSheet.create({
   modalItemText: { fontSize: 16, color: '#333' },
   modalCloseButton: { marginTop: 20, padding: 15, alignItems: 'center', backgroundColor: '#EEE', borderRadius: 10 },
   modalCloseText: { fontSize: 16, fontWeight: 'bold', color: '#333' },
+
+  // Estilos do Time Picker
+  timeSlot: { padding: 15, alignItems: 'center', borderRadius: 8, width: 80 },
+  timeSlotSelected: { backgroundColor: '#FFEBEE' },
+  timeText: { fontSize: 18, color: '#333' },
+  timeTextSelected: { color: '#D92D20', fontWeight: 'bold', fontSize: 24 },
+  modalButton: { flex: 1, padding: 15, alignItems: 'center', borderRadius: 10, marginHorizontal: 5 },
+
+  // --- Estilos para Modais de Sucesso e Erro (Cards Centrais) ---
+  centerModalOverlay: { flex: 1, justifyContent: 'center', alignItems: 'center', backgroundColor: 'rgba(0,0,0,0.6)' },
+  card: { width: '85%', backgroundColor: 'white', borderRadius: 20, padding: 30, alignItems: 'center', elevation: 10 },
+  cardTitle: { fontSize: 22, fontWeight: 'bold', color: '#333', marginBottom: 10 },
+  cardMessage: { fontSize: 16, color: '#666', textAlign: 'center', marginBottom: 25 },
+  cardButton: { borderRadius: 30, paddingVertical: 12, paddingHorizontal: 40 },
+  cardButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 });
 
 export default RequestUncollectedScreen;

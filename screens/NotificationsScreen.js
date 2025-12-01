@@ -1,4 +1,4 @@
-import React, { useState, useCallback } from "react";
+import React, { useState, useCallback, useEffect } from "react";
 import {
   View,
   Text,
@@ -8,24 +8,59 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
+  Modal
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../utils/supabaseClient";
 import { useFocusEffect } from "@react-navigation/native";
 
-const NotificationsScreen = ({ navigation }) => {
+// CORES TEMÁTICAS
+const THEME = {
+  citizen: { primary: "#007BFF", light: "#E3F2FD" },
+  company: { primary: "#F0B90B", light: "#FFFDE7" }
+};
+
+export default function NotificationsScreen({ navigation }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
+  
+  // Estado do Tema (Começa como Cidadão por padrão)
+  const [isCompany, setIsCompany] = useState(false);
+  const theme = isCompany ? THEME.company : THEME.citizen;
+
+  // Estados do Alerta Bonito
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertAction, setAlertAction] = useState(null); // Callback para ação destrutiva
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchNotifications();
+    }, [])
+  );
 
   const fetchNotifications = async () => {
     try {
-      const {
-        data: { user },
-      } = await supabase.auth.getUser();
+      const { data: { user } } = await supabase.auth.getUser();
       if (!user) return;
 
+      // 1. Descobre o tipo de usuário para ajustar a cor
+      const { data: userData } = await supabase
+        .from("usuarios")
+        .select("tipo_usuario")
+        .eq("usuario_id", user.id)
+        .single();
+      
+      if (userData && userData.tipo_usuario === 'CNPJ') {
+          setIsCompany(true);
+      } else {
+          setIsCompany(false);
+      }
+
+      // 2. Busca notificações
       const { data, error } = await supabase
         .from("notificacoes")
         .select("*")
@@ -41,12 +76,6 @@ const NotificationsScreen = ({ navigation }) => {
     }
   };
 
-  useFocusEffect(
-    useCallback(() => {
-      fetchNotifications();
-    }, [])
-  );
-
   const onRefresh = () => {
     setRefreshing(true);
     fetchNotifications();
@@ -61,53 +90,42 @@ const NotificationsScreen = ({ navigation }) => {
     }
   };
 
-  // --- FUNÇÃO PARA LIMPAR TUDO ---
   const handleClearAll = () => {
     if (notifications.length === 0) return;
 
-    Alert.alert(
-      "Limpar Notificações",
-      "Tem certeza que deseja apagar todas as notificações? Essa ação não pode ser desfeita.",
-      [
-        { text: "Cancelar", style: "cancel" },
-        {
-          text: "Apagar Tudo",
-          style: "destructive",
-          onPress: async () => {
-            // 1. Limpa visualmente
-            setNotifications([]);
-
-            // 2. Apaga do banco
-            const {
-              data: { user },
-            } = await supabase.auth.getUser();
-            if (user) {
-              await supabase
-                .from("notificacoes")
-                .delete()
-                .eq("usuario_id", user.id);
-            }
-          },
-        },
-      ]
-    );
+    // Configura o alerta de confirmação
+    setAlertTitle("Limpar Notificações");
+    setAlertMessage("Tem certeza que deseja apagar todas as notificações? Essa ação não pode ser desfeita.");
+    setAlertAction(() => async () => {
+        setNotifications([]);
+        const { data: { user } } = await supabase.auth.getUser();
+        if (user) {
+            await supabase
+            .from("notificacoes")
+            .delete()
+            .eq("usuario_id", user.id);
+        }
+        setAlertVisible(false);
+    });
+    setAlertVisible(true);
   };
 
   const getIconStyle = (type) => {
+    // Cores fixas para status específicos (sucesso/erro), mas adaptável onde fizer sentido
     switch (type) {
       case "truck":
         return {
           icon: "truck-delivery-outline",
           lib: MaterialCommunityIcons,
-          color: "#007BFF",
-          bg: "#E3F2FD",
+          color: theme.primary, // Usa cor do tema
+          bg: theme.light,
         };
       case "info":
         return {
           icon: "information-variant",
           lib: MaterialCommunityIcons,
-          color: "#007BFF",
-          bg: "#E3F2FD",
+          color: theme.primary,
+          bg: theme.light,
         };
       case "success":
         return {
@@ -122,13 +140,6 @@ const NotificationsScreen = ({ navigation }) => {
           lib: MaterialCommunityIcons,
           color: "#E65100",
           bg: "#FFF3E0",
-        };
-      case "tip":
-        return {
-          icon: "lightbulb-on-outline",
-          lib: MaterialCommunityIcons,
-          color: "#FBC02D",
-          bg: "#FFF9C4",
         };
       default:
         return {
@@ -147,7 +158,7 @@ const NotificationsScreen = ({ navigation }) => {
 
     return (
       <TouchableOpacity
-        style={[styles.card, !item.lida && styles.unreadCard]}
+        style={[styles.card, !item.lida && { backgroundColor: theme.light, borderColor: theme.primary + '40' }]}
         onPress={() => handlePress(item.id, item.lida)}
         activeOpacity={0.7}
       >
@@ -159,19 +170,45 @@ const NotificationsScreen = ({ navigation }) => {
           <Text style={[styles.title, !item.lida && styles.boldTitle]}>
             {item.titulo}
           </Text>
-
-          {/* CORREÇÃO AQUI: Mudamos de item.description para item.descricao */}
           <Text style={styles.description}>{item.descricao}</Text>
-
           <Text style={styles.time}>{date}</Text>
         </View>
 
-        {!item.lida && <View style={styles.dot} />}
+        {!item.lida && <View style={[styles.dot, { backgroundColor: theme.primary }]} />}
       </TouchableOpacity>
     );
   };
 
   const unreadCount = notifications.filter((n) => !n.lida).length;
+
+  // --- Modal de Confirmação ---
+  const ConfirmationAlert = () => (
+    <Modal transparent={true} visible={alertVisible} animationType="fade">
+        <View style={styles.modalOverlay}>
+            <View style={styles.modalContent}>
+                <MaterialCommunityIcons name="trash-can-outline" size={50} color="#D92D20" style={{marginBottom: 10}} />
+                <Text style={styles.modalTitle}>{alertTitle}</Text>
+                <Text style={styles.modalMessage}>{alertMessage}</Text>
+                
+                <View style={styles.modalButtonsRow}>
+                    <TouchableOpacity 
+                        style={[styles.modalButton, { backgroundColor: '#EEE', marginRight: 10 }]} 
+                        onPress={() => setAlertVisible(false)}
+                    >
+                        <Text style={[styles.modalButtonText, { color: '#333' }]}>Cancelar</Text>
+                    </TouchableOpacity>
+                    
+                    <TouchableOpacity 
+                        style={[styles.modalButton, { backgroundColor: '#D92D20' }]} 
+                        onPress={alertAction}
+                    >
+                        <Text style={[styles.modalButtonText, { color: 'white' }]}>Apagar</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </View>
+    </Modal>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
@@ -185,7 +222,6 @@ const NotificationsScreen = ({ navigation }) => {
 
         <Text style={styles.headerTitle}>Notificações</Text>
 
-        {/* Botão de Limpar (Lixeira) */}
         {notifications.length > 0 && (
           <TouchableOpacity onPress={handleClearAll} style={styles.clearButton}>
             <Ionicons name="trash-outline" size={24} color="#E74C3C" />
@@ -193,10 +229,9 @@ const NotificationsScreen = ({ navigation }) => {
         )}
       </View>
 
-      {/* Sub-cabeçalho para o contador (se houver não lidas) */}
       {unreadCount > 0 && (
-        <View style={styles.subHeader}>
-          <Text style={styles.subHeaderText}>
+        <View style={[styles.subHeader, { backgroundColor: theme.light, borderColor: theme.primary + '20' }]}>
+          <Text style={[styles.subHeaderText, { color: theme.primary }]}>
             Você tem {unreadCount} novas notificações
           </Text>
         </View>
@@ -204,7 +239,7 @@ const NotificationsScreen = ({ navigation }) => {
 
       {loading ? (
         <View style={{ flex: 1, justifyContent: "center" }}>
-          <ActivityIndicator size="large" color="#007BFF" />
+          <ActivityIndicator size="large" color={theme.primary} />
         </View>
       ) : (
         <FlatList
@@ -213,7 +248,7 @@ const NotificationsScreen = ({ navigation }) => {
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} />
+            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />
           }
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -227,9 +262,11 @@ const NotificationsScreen = ({ navigation }) => {
           }
         />
       )}
+
+      <ConfirmationAlert />
     </SafeAreaView>
   );
-};
+}
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#FFF" },
@@ -253,13 +290,11 @@ const styles = StyleSheet.create({
   clearButton: { padding: 5 },
 
   subHeader: {
-    backgroundColor: "#F0F8FF",
     paddingVertical: 8,
     paddingHorizontal: 20,
     borderBottomWidth: 1,
-    borderBottomColor: "#E6F2FF",
   },
-  subHeaderText: { color: "#007BFF", fontSize: 13, fontWeight: "600" },
+  subHeaderText: { fontSize: 13, fontWeight: "600" },
 
   listContent: { padding: 20 },
   card: {
@@ -271,15 +306,7 @@ const styles = StyleSheet.create({
     marginBottom: 15,
     borderWidth: 1,
     borderColor: "#EEE",
-    elevation: 2,
-    shadowColor: "#000",
-    shadowOpacity: 0.05,
-    shadowRadius: 3,
-    shadowOffset: { width: 0, height: 1 },
-  },
-  unreadCard: {
-    borderColor: "#E3F2FD",
-    backgroundColor: "#F8FDFF",
+    elevation: 1,
   },
   iconContainer: {
     width: 40,
@@ -298,11 +325,29 @@ const styles = StyleSheet.create({
     width: 10,
     height: 10,
     borderRadius: 5,
-    backgroundColor: "#007BFF",
     marginTop: 6,
   },
   emptyState: { alignItems: "center", marginTop: 60 },
   emptyText: { color: "#999", marginTop: 10, marginBottom: 20 },
-});
 
-export default NotificationsScreen;
+  // Modal
+  modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+  },
+  modalContent: {
+      width: '85%',
+      backgroundColor: 'white',
+      borderRadius: 20,
+      padding: 25,
+      alignItems: 'center',
+      elevation: 5,
+  },
+  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10, color: '#333' },
+  modalMessage: { fontSize: 15, color: '#666', textAlign: 'center', marginBottom: 20 },
+  modalButtonsRow: { flexDirection: 'row', width: '100%', justifyContent: 'space-between' },
+  modalButton: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
+  modalButtonText: { fontWeight: 'bold', fontSize: 15 },
+});

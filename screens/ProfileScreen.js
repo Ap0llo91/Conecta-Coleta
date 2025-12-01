@@ -11,9 +11,23 @@ import {
   Share,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../utils/supabaseClient";
 import { useFocusEffect } from "@react-navigation/native";
+
+// --- CORES DO TEMA ---
+const THEME = {
+  citizen: {
+    primary: "#007BFF", // Azul
+    light: "#E3F2FD",   // Azul Claro
+    icon: "person",
+  },
+  company: {
+    primary: "#F0B90B", // Amarelo/Laranja (Igual ao CompanyAuth)
+    light: "#FFFDE7",   // Amarelo Claro
+    icon: "office-building",
+  }
+};
 
 // --- FORMATAÇÃO ---
 const formatDocument = (text) => {
@@ -31,7 +45,10 @@ const formatDocument = (text) => {
 
 const formatPhone = (text) => {
   if (!text) return "Telefone não informado";
-  const cleaned = text.replace(/\D/g, "");
+  let cleaned = text.replace(/\D/g, "");
+  
+  if (cleaned.length > 11) cleaned = cleaned.substring(0, 11); // Limita tamanho
+
   if (cleaned.length === 11) {
     return cleaned.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, "($1) $2 $3-$4");
   } 
@@ -45,6 +62,12 @@ export default function ProfileScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [address, setAddress] = useState(null);
+  
+  // Estado para controlar se é Empresa ou Cidadão
+  const [isCompany, setIsCompany] = useState(false);
+
+  // Define as cores com base no tipo de usuário
+  const currentTheme = isCompany ? THEME.company : THEME.citizen;
 
   useFocusEffect(
     useCallback(() => {
@@ -67,9 +90,17 @@ export default function ProfileScreen({ navigation }) {
         .eq("usuario_id", user.id)
         .single();
 
-      if (profileData) setProfile(profileData);
+      if (profileData) {
+        setProfile(profileData);
+        // Verifica o tipo para ajustar o tema
+        if (profileData.tipo_usuario === 'CNPJ') {
+            setIsCompany(true);
+        } else {
+            setIsCompany(false);
+        }
+      }
 
-      // 2. Endereço (Pega o mais recente, sem filtros complexos)
+      // 2. Endereço
       const { data: addressData } = await supabase
         .from("enderecos")
         .select("*")
@@ -103,7 +134,7 @@ export default function ProfileScreen({ navigation }) {
   const handleShare = async () => {
     try {
       await Share.share({
-        message: "Conecta Coleta - O melhor app de gestão de resíduos de Recife!",
+        message: "Conecta Coleta - Soluções sustentáveis para você e sua empresa!",
       });
     } catch (error) {
       console.log(error.message);
@@ -118,10 +149,9 @@ export default function ProfileScreen({ navigation }) {
     );
   }
 
-  // --- Monta a string do endereço com CEP ---
+  // --- Monta a string do endereço ---
   let fullAddress = "Endereço não cadastrado";
   if (address) {
-    // Se tiver CEP, mostra ele primeiro
     const cepPart = address.cep && address.cep !== '00000-000' ? `CEP: ${address.cep}\n` : "";
     
     if (address.numero || address.bairro) {
@@ -141,7 +171,8 @@ export default function ProfileScreen({ navigation }) {
         contentContainerStyle={styles.scrollContent}
         showsVerticalScrollIndicator={false}
       >
-        <View style={styles.header}>
+        {/* HEADER DINÂMICO */}
+        <View style={[styles.header, { backgroundColor: currentTheme.primary }]}>
           <View style={styles.headerTopRow}>
             <View />
             <TouchableOpacity onPress={handleLogout}>
@@ -163,7 +194,12 @@ export default function ProfileScreen({ navigation }) {
                 />
               ) : (
                 <View style={styles.avatarPlaceholder}>
-                  <Ionicons name="person" size={40} color="#007BFF" />
+                  {/* Ícone muda se for empresa */}
+                  {isCompany ? (
+                      <MaterialCommunityIcons name="office-building" size={36} color={currentTheme.primary} />
+                  ) : (
+                      <Ionicons name="person" size={40} color={currentTheme.primary} />
+                  )}
                 </View>
               )}
             </View>
@@ -204,10 +240,12 @@ export default function ProfileScreen({ navigation }) {
           </View>
 
           <TouchableOpacity
-            style={styles.editButton}
+            style={[styles.editButton, { backgroundColor: currentTheme.light }]}
             onPress={() => navigation.navigate("EditProfile")}
           >
-            <Text style={styles.editButtonText}>Editar Informações</Text>
+            <Text style={[styles.editButtonText, { color: currentTheme.primary }]}>
+                Editar Informações
+            </Text>
           </TouchableOpacity>
         </View>
 
@@ -217,7 +255,8 @@ export default function ProfileScreen({ navigation }) {
           icon="time-outline"
           title="Histórico"
           subtitle="Seus pedidos e solicitações"
-          color="#007BFF"
+          color={currentTheme.primary}
+          bgColor={currentTheme.light}
           onPress={() => navigation.navigate("History")}
         />
 
@@ -225,7 +264,8 @@ export default function ProfileScreen({ navigation }) {
           icon="notifications-outline"
           title="Notificações"
           subtitle="Alertas e avisos"
-          color="#007BFF"
+          color={currentTheme.primary}
+          bgColor={currentTheme.light}
           onPress={() => navigation.navigate("Notifications")}
         />
 
@@ -233,7 +273,8 @@ export default function ProfileScreen({ navigation }) {
           icon="settings-outline"
           title="Configurações"
           subtitle="Preferências do aplicativo"
-          color="#007BFF"
+          color={currentTheme.primary}
+          bgColor={currentTheme.light}
           onPress={() => navigation.navigate("Settings")}
         />
 
@@ -243,15 +284,17 @@ export default function ProfileScreen({ navigation }) {
           icon="help-circle-outline"
           title="Central de Ajuda"
           subtitle="Perguntas frequentes"
-          color="#007BFF"
+          color={currentTheme.primary}
+          bgColor={currentTheme.light}
           onPress={() => navigation.navigate("FAQ")}
         />
 
         <MenuOption
           icon="share-social-outline"
           title="Compartilhar App"
-          subtitle="Convide amigos e vizinhos"
-          color="#007BFF"
+          subtitle="Convide parceiros e amigos"
+          color={currentTheme.primary}
+          bgColor={currentTheme.light}
           onPress={handleShare}
         />
 
@@ -261,9 +304,10 @@ export default function ProfileScreen({ navigation }) {
   );
 }
 
-const MenuOption = ({ icon, title, subtitle, color, onPress }) => (
+// Componente MenuOption ajustado para receber cor de fundo
+const MenuOption = ({ icon, title, subtitle, color, bgColor, onPress }) => (
   <TouchableOpacity style={styles.menuOption} onPress={onPress}>
-    <View style={[styles.iconCircle, { backgroundColor: "#E3F2FD" }]}>
+    <View style={[styles.iconCircle, { backgroundColor: bgColor }]}>
       <Ionicons name={icon} size={22} color={color} />
     </View>
     <View style={styles.menuTextContainer}>
@@ -279,7 +323,7 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   scrollContent: { paddingBottom: 20 },
   header: {
-    backgroundColor: "#007BFF",
+    // A cor de fundo agora é dinâmica via style inline
     paddingHorizontal: 20,
     paddingBottom: 40,
     paddingTop: 10,
@@ -364,14 +408,14 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   editButton: {
-    backgroundColor: "#E3F2FD",
+    // Cor de fundo dinâmica
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",
     marginTop: 10,
   },
   editButtonText: {
-    color: "#007BFF",
+    // Cor do texto dinâmica
     fontWeight: "bold",
     fontSize: 14,
   },

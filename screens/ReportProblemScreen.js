@@ -2,424 +2,617 @@ import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
+  TextInput,
   StyleSheet,
   ScrollView,
   TouchableOpacity,
-  TextInput,
   Alert,
+  Image,
+  ActivityIndicator,
+  KeyboardAvoidingView,
+  Platform,
   Modal,
-  FlatList,
-  ActivityIndicator, // Adicionado para o ícone de loading do GPS
+  TouchableWithoutFeedback
 } from "react-native";
-// 1. Importação da biblioteca Safe Area
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
-import { StatusBar } from "expo-status-bar";
 import { supabase } from "../utils/supabaseClient";
-import * as Location from "expo-location";
+import * as ImagePicker from "expo-image-picker";
+import { decode } from "base64-arraybuffer";
+import * as Location from 'expo-location';
 
-// Lista estática de fallback caso o Supabase falhe
-const STATIC_PROBLEM_TYPES = [
-  { label: "Coleta não realizada", value: "static_coleta_nao_realizada" },
-  { label: "Lixo acumulado", value: "static_lixo_acumulado" },
-  { label: "Vazamento do caminhão", value: "static_vazamento_caminhao" },
-  { label: "Contentor danificado", value: "static_contentor_danificado" },
-  { label: "Horário irregular", value: "static_horario_irregular" },
-  { label: "Outro", value: "static_outro" },
+const PROBLEM_TYPES = [
+  "Lixo acumulado na rua",
+  "Coleta não realizada",
+  "Ecoponto lotado/sujo",
+  "Descarte irregular",
+  "Boca de lobo entupida",
+  "Outros",
 ];
 
 export default function ReportProblemScreen({ navigation }) {
-  const [problemType, setProblemType] = useState(null);
-  const [problemTypeLabel, setProblemTypeLabel] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [type, setType] = useState("");
   const [description, setDescription] = useState("");
   const [address, setAddress] = useState("");
-  const [loading, setLoading] = useState(false);
-  const [problemTypesList, setProblemTypesList] = useState([]);
-  const [isModalVisible, setIsModalVisible] = useState(false);
+  const [imageUri, setImageUri] = useState(null);
+  const [imageBase64, setImageBase64] = useState(null);
+  const [showTypePicker, setShowTypePicker] = useState(false);
+  const [userLocation, setUserLocation] = useState(null);
+  const [loadingAddress, setLoadingAddress] = useState(false);
+  
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false); // Novo estado para o sucesso
 
   useEffect(() => {
-    const fetchProblemTypes = async () => {
-      const { data, error } = await supabase
-        .from("chamadotipos")
-        .select("chamado_tipo_id, nome_servico")
-        .in("perfil_acesso", ["CPF", "AMBOS"]);
-
-      if (error || !data || data.length === 0) {
-        console.error(
-          "Erro ao buscar tipos (usando lista estática):",
-          error?.message
-        );
-        setProblemTypesList(STATIC_PROBLEM_TYPES);
-      } else {
-        const types = data.map((item) => ({
-          label: item.nome_servico,
-          value: item.chamado_tipo_id,
-        }));
-        setProblemTypesList(types);
+    (async () => {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === 'granted') {
+        let location = await Location.getCurrentPositionAsync({});
+        setUserLocation(location.coords);
       }
-    };
-    fetchProblemTypes();
+    })();
   }, []);
 
-  const handleGetLocation = async () => {
-    if (loading) return;
-
-    let { status } = await Location.requestForegroundPermissionsAsync();
-    if (status !== "granted") {
-      Alert.alert(
-        "Permissão negada",
-        "Não podemos pegar sua localização sem permissão."
-      );
-      return;
-    }
-    setLoading(true);
+  // --- 1. FUNÇÃO DE SELEÇÃO DE IMAGEM ---
+  const pickImage = async (useCamera) => {
     try {
-      let location = await Location.getCurrentPositionAsync({});
-      let geocode = await Location.reverseGeocodeAsync(location.coords);
-      if (geocode.length > 0) {
-        const g = geocode[0];
-        const formattedAddress = `${g.street || ""}, ${g.streetNumber || ""}, ${g.subregion || ""}`;
-        setAddress(formattedAddress);
+      if (useCamera) {
+        const { status } = await ImagePicker.requestCameraPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert("Permissão necessária", "Precisamos de acesso à câmera.");
+          return;
+        }
       } else {
-        setAddress("Não foi possível encontrar o endereço");
+        const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+        if (status !== 'granted') {
+          Alert.alert("Permissão necessária", "Precisamos de acesso à galeria.");
+          return;
+        }
+      }
+
+      const options = {
+        mediaTypes: ImagePicker.MediaTypeOptions.Images,
+        allowsEditing: true,
+        aspect: [4, 3],
+        quality: 0.5,
+        base64: true,
+      };
+
+      let result;
+      if (useCamera) {
+        result = await ImagePicker.launchCameraAsync(options);
+      } else {
+        result = await ImagePicker.launchImageLibraryAsync(options);
+      }
+
+      if (!result.canceled) {
+        setImageUri(result.assets[0].uri);
+        setImageBase64(result.assets[0].base64);
+        setPhotoModalVisible(false);
       }
     } catch (error) {
-      Alert.alert("Erro", "Falha ao obter localização.");
+      console.log("Erro ao capturar imagem:", error);
+      Alert.alert("Erro", "Não foi possível carregar a imagem.");
+    }
+  };
+
+  const uploadImageToSupabase = async () => {
+    if (!imageBase64) return null;
+
+    const fileName = `${Date.now()}_${Math.floor(Math.random() * 1000)}.jpg`;
+    const filePath = `uploads/${fileName}`;
+
+    const { error } = await supabase.storage
+      .from("problem-reports")
+      .upload(filePath, decode(imageBase64), {
+        contentType: "image/jpeg",
+      });
+
+    if (error) {
+      console.log("Erro no upload da imagem:", error);
+      throw error;
+    }
+
+    const { data } = supabase.storage
+      .from("problem-reports")
+      .getPublicUrl(filePath);
+
+    return data.publicUrl;
+  };
+
+  const handleSubmit = async () => {
+    if (!type || !description || !address) {
+      Alert.alert("Campos obrigatórios", "Por favor, preencha tipo, descrição e endereço.");
+      return;
+    }
+
+    setLoading(true);
+
+    try {
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user) throw new Error("Usuário não autenticado");
+
+      let finalPhotoUrl = null;
+
+      if (imageBase64) {
+        finalPhotoUrl = await uploadImageToSupabase();
+      }
+
+      const { error } = await supabase
+        .from("chamados")
+        .insert({
+          usuario_id: user.id,
+          tipo_problema: type,
+          descricao: description,
+          endereco_local: address,
+          foto_url: finalPhotoUrl,
+          status: "Pendente",
+          latitude: userLocation?.latitude || 0,
+          longitude: userLocation?.longitude || 0,
+        });
+
+      if (error) throw error;
+
+      // Mostra o Modal Bonito em vez do Alert
+      setSuccessModalVisible(true);
+
+    } catch (error) {
+      console.log("Erro ao enviar:", error);
+      Alert.alert("Erro", "Falha ao enviar reporte. Verifique sua conexão.");
     } finally {
       setLoading(false);
     }
   };
 
-  const handleSubmitReport = async () => {
-    if (!problemType || !description || !address) {
-      Alert.alert(
-        "Campos incompletos",
-        "Por favor, preencha o tipo, descrição e endereço."
-      );
-      return;
-    }
-    if (loading) return;
-    setLoading(true);
+  const useCurrentLocation = async () => {
+      if (!userLocation) {
+          Alert.alert("GPS", "Aguardando sinal de GPS...");
+          let { status } = await Location.requestForegroundPermissionsAsync();
+          if (status === 'granted') {
+            let location = await Location.getCurrentPositionAsync({});
+            setUserLocation(location.coords);
+          }
+          return;
+      }
 
-    const {
-      data: { user },
-    } = await supabase.auth.getUser();
-    if (!user) {
-      Alert.alert("Erro", "Usuário não autenticado.");
-      setLoading(false);
-      return;
-    }
-
-    const { error } = await supabase.from("chamados").insert({
-      usuario_id: user.id,
-      chamado_tipo_id: problemType,
-      descricao_usuario: description,
-      latitude_ocorrencia: 0, // Placeholder
-      longitude_ocorrencia: 0, // Placeholder
-      status: "ABERTO",
-    });
-
-    if (error) {
-      Alert.alert("Erro ao enviar reporte", error.message);
-    } else {
-      Alert.alert("Sucesso!", "Seu reporte foi enviado.", [
-        { text: "OK", onPress: () => navigation.goBack() },
-      ]);
-    }
-    setLoading(false);
+      setLoadingAddress(true);
+      try {
+          const reverseGeocoded = await Location.reverseGeocodeAsync(userLocation);
+          if (reverseGeocoded.length > 0) {
+              const place = reverseGeocoded[0];
+              let addrParts = [];
+              if (place.street) addrParts.push(place.street);
+              if (place.streetNumber) addrParts.push(place.streetNumber);
+              if (place.district) addrParts.push(place.district);
+              
+              const formattedAddress = addrParts.join(", ");
+              
+              if (formattedAddress) {
+                  setAddress(formattedAddress);
+              } else {
+                  setAddress("Localização capturada");
+              }
+          }
+      } catch (error) {
+          console.log("Erro reverse geocoding:", error);
+          setAddress(`Lat: ${userLocation.latitude.toFixed(5)}, Long: ${userLocation.longitude.toFixed(5)}`);
+      } finally {
+          setLoadingAddress(false);
+      }
   };
 
-  const onProblemTypeSelect = (item) => {
-    setProblemType(item.value);
-    setProblemTypeLabel(item.label);
-    setIsModalVisible(false);
+  const handleSuccessClose = () => {
+      setSuccessModalVisible(false);
+      navigation.goBack();
   };
 
   return (
-    // 2. Troca de View por SafeAreaView
     <SafeAreaView style={styles.container}>
-      <StatusBar style="light" />
-
-      {/* Cabeçalho Vermelho */}
       <View style={styles.header}>
-        <TouchableOpacity
-          onPress={() => navigation.goBack()}
-          style={styles.backButton}
-        >
-          <Ionicons name="arrow-back" size={24} color="#fff" />
-          <Text style={styles.backText}>Voltar</Text>
+        <TouchableOpacity onPress={() => navigation.goBack()} style={styles.backButton}>
+          <Ionicons name="arrow-back" size={24} color="white" />
         </TouchableOpacity>
-        <Text style={styles.headerTitle}>Reportar um Problema</Text>
-        <Text style={styles.headerSubtitle}>
-          Tire uma foto e nos conte o que aconteceu
-        </Text>
+        <Text style={styles.headerTitle}>Reportar Problema</Text>
       </View>
 
-      <ScrollView
-        style={styles.scrollContainer}
-        contentContainerStyle={styles.scrollContent}
+      <KeyboardAvoidingView 
+        behavior={Platform.OS === "ios" ? "padding" : "height"}
+        style={{ flex: 1 }}
       >
-        <Text style={styles.label}>Tipo de problema</Text>
-        <TouchableOpacity
-          style={styles.pickerButton}
-          onPress={() => setIsModalVisible(true)}
-        >
-          <Text
-            style={
-              problemType ? styles.pickerButtonText : styles.pickerPlaceholder
-            }
-          >
-            {problemTypeLabel || "Selecione o tipo"}
+        <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
+          <Text style={styles.helperText}>
+            Identificou algo errado na coleta ou limpeza? Nos conte os detalhes.
           </Text>
-          <Ionicons name="chevron-down" size={20} color="#666" />
-        </TouchableOpacity>
 
-        <Text style={styles.label}>Descrição</Text>
-        <TextInput
-          style={styles.inputMultiline}
-          placeholder="Descreva o problema em detalhes..."
-          multiline
-          numberOfLines={4}
-          value={description}
-          onChangeText={setDescription}
-        />
+          <Text style={styles.label}>Tipo de Problema</Text>
+          <TouchableOpacity 
+            style={styles.pickerTrigger} 
+            onPress={() => setShowTypePicker(!showTypePicker)}
+          >
+            <Text style={[styles.pickerText, !type && { color: '#999' }]}>
+              {type || "Selecione o tipo"}
+            </Text>
+            <Ionicons name={showTypePicker ? "chevron-up" : "chevron-down"} size={20} color="#666" />
+          </TouchableOpacity>
+          
+          {showTypePicker && (
+            <View style={styles.pickerOptions}>
+              {PROBLEM_TYPES.map((item) => (
+                <TouchableOpacity 
+                    key={item} 
+                    style={styles.pickerOption}
+                    onPress={() => {
+                        setType(item);
+                        setShowTypePicker(false);
+                    }}
+                >
+                    <Text style={styles.optionText}>{item}</Text>
+                    {type === item && <Ionicons name="checkmark" size={18} color="#D32F2F" />}
+                </TouchableOpacity>
+              ))}
+            </View>
+          )}
 
-        <Text style={styles.label}>Endereço</Text>
-        <View style={styles.addressContainer}>
+          <Text style={styles.label}>Descrição</Text>
           <TextInput
-            style={styles.inputAddress}
-            placeholder="Rua, número, bairro"
-            value={address}
-            onChangeText={setAddress}
+            style={[styles.input, styles.textArea]}
+            placeholder="Descreva o problema em detalhes..."
+            multiline
+            numberOfLines={4}
+            value={description}
+            onChangeText={setDescription}
+            textAlignVertical="top"
           />
-          <TouchableOpacity onPress={handleGetLocation} disabled={loading}>
-             {/* Pequeno detalhe visual: mostrar loading no ícone se estiver buscando */}
-            {loading && address === "" ? (
-               <ActivityIndicator size="small" color="#007BFF" />
+
+          <Text style={styles.label}>Endereço / Ponto de Referência</Text>
+          <View style={styles.addressRow}>
+            <TextInput
+                style={[styles.input, { flex: 1, marginBottom: 0 }]}
+                placeholder="Rua, número, bairro"
+                value={address}
+                onChangeText={setAddress}
+            />
+            <TouchableOpacity 
+                style={styles.gpsButton} 
+                onPress={useCurrentLocation}
+                disabled={loadingAddress}
+            >
+                {loadingAddress ? (
+                    <ActivityIndicator size="small" color="#007BFF" />
+                ) : (
+                    <Ionicons name="location" size={24} color="#007BFF" />
+                )}
+            </TouchableOpacity>
+          </View>
+          <Text style={styles.locationHint}>Toque no botão azul para preencher com sua localização atual</Text>
+
+          <Text style={styles.label}>Foto (Opcional)</Text>
+          <TouchableOpacity style={styles.photoButton} onPress={() => setPhotoModalVisible(true)}>
+            {imageUri ? (
+              <Image source={{ uri: imageUri }} style={styles.previewImage} resizeMode="cover" />
             ) : (
-               <Ionicons name="location-outline" size={24} color="#007BFF" />
+              <View style={styles.photoPlaceholder}>
+                <Ionicons name="camera-outline" size={40} color="#999" />
+                <Text style={styles.photoText}>Adicionar foto do problema</Text>
+              </View>
+            )}
+            {imageUri && (
+                <TouchableOpacity 
+                    style={styles.removeIcon} 
+                    onPress={() => { setImageUri(null); setImageBase64(null); }}
+                >
+                    <Ionicons name="close-circle" size={24} color="#D32F2F" />
+                </TouchableOpacity>
             )}
           </TouchableOpacity>
-        </View>
-        <Text style={styles.locationHelper}>Ou use sua localização atual</Text>
 
-        <Text style={styles.label}>Foto (opcional)</Text>
-        <TouchableOpacity style={styles.photoBox}>
-          <Ionicons name="camera-outline" size={40} color="#ccc" />
-          <Text style={styles.photoText}>Tirar ou escolher foto</Text>
-        </TouchableOpacity>
+          <View style={{ height: 20 }} />
 
-        <TouchableOpacity
-          style={styles.submitButton}
-          onPress={handleSubmitReport}
-          disabled={loading}
-        >
-          <Ionicons name="send-outline" size={20} color="#fff" />
-          <Text style={styles.submitButtonText}>
-            {loading ? "Enviando..." : "Enviar Reporte"}
-          </Text>
-        </TouchableOpacity>
-      </ScrollView>
+          <TouchableOpacity 
+            style={styles.submitButton} 
+            onPress={handleSubmit}
+            disabled={loading}
+          >
+            {loading ? (
+                <ActivityIndicator color="white" />
+            ) : (
+                <>
+                    <Ionicons name="paper-plane-outline" size={20} color="white" style={{ marginRight: 10 }} />
+                    <Text style={styles.submitText}>Enviar Reporte</Text>
+                </>
+            )}
+          </TouchableOpacity>
 
-      {/* Modal */}
+          <View style={{ height: 40 }} />
+        </ScrollView>
+      </KeyboardAvoidingView>
+
+      {/* --- MODAL DE FOTO --- */}
       <Modal
         animationType="slide"
         transparent={true}
-        visible={isModalVisible}
-        onRequestClose={() => setIsModalVisible(false)}
+        visible={photoModalVisible}
+        onRequestClose={() => setPhotoModalVisible(false)}
       >
-        <View style={styles.modalBackdrop}>
-          <View style={styles.modalView}>
-            <Text style={styles.modalTitle}>Selecione o tipo</Text>
-            <FlatList
-              data={problemTypesList}
-              keyExtractor={(item) => item.value}
-              renderItem={({ item }) => (
-                <TouchableOpacity
-                  style={styles.modalItem}
-                  onPress={() => onProblemTypeSelect(item)}
-                >
-                  <Text style={styles.modalItemText}>{item.label}</Text>
-                </TouchableOpacity>
-              )}
-            />
-            <TouchableOpacity
-              style={styles.modalCloseButton}
-              onPress={() => setIsModalVisible(false)}
-            >
-              <Text style={styles.modalCloseText}>Fechar</Text>
+        <TouchableWithoutFeedback onPress={() => setPhotoModalVisible(false)}>
+          <View style={styles.modalOverlay} />
+        </TouchableWithoutFeedback>
+
+        <View style={styles.bottomSheet}>
+          <View style={styles.bottomSheetHandle} />
+          <Text style={styles.bottomSheetTitle}>Adicionar Foto</Text>
+          <Text style={styles.bottomSheetSubtitle}>Escolha como deseja enviar a imagem</Text>
+          
+          <View style={styles.bottomSheetOptions}>
+            <TouchableOpacity style={styles.optionButton} onPress={() => pickImage(true)}>
+              <View style={[styles.optionIcon, { backgroundColor: '#E3F2FD' }]}>
+                <Ionicons name="camera" size={28} color="#007BFF" />
+              </View>
+              <Text style={styles.optionLabel}>Câmera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.optionButton} onPress={() => pickImage(false)}>
+              <View style={[styles.optionIcon, { backgroundColor: '#E8F5E9' }]}>
+                <Ionicons name="images" size={28} color="#2E7D32" />
+              </View>
+              <Text style={styles.optionLabel}>Galeria</Text>
             </TouchableOpacity>
           </View>
+
+          <TouchableOpacity 
+            style={styles.closeButton} 
+            onPress={() => setPhotoModalVisible(false)}
+          >
+            <Text style={styles.closeButtonText}>Cancelar</Text>
+          </TouchableOpacity>
         </View>
       </Modal>
+
+      {/* --- MODAL DE SUCESSO --- */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={successModalVisible}
+        onRequestClose={handleSuccessClose}
+      >
+        <View style={styles.successOverlay}>
+            <View style={styles.successCard}>
+                <View style={styles.successIconContainer}>
+                    <Ionicons name="checkmark-circle" size={64} color="#2ECC71" />
+                </View>
+                <Text style={styles.successTitle}>Sucesso!</Text>
+                <Text style={styles.successMessage}>Seu reporte foi enviado. Obrigado por colaborar com a limpeza da cidade!</Text>
+                
+                <TouchableOpacity style={styles.successButton} onPress={handleSuccessClose}>
+                    <Text style={styles.successButtonText}>OK, Voltar</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: "#D92D20", // Vermelho escuro
-  },
+  container: { flex: 1, backgroundColor: "#F5F5F5" },
   header: {
-    // 3. Padding ajustado para SafeAreaView
-    paddingTop: 20, 
-    paddingHorizontal: 20,
-    paddingBottom: 20,
-  },
-  backButton: {
     flexDirection: "row",
     alignItems: "center",
-    marginBottom: 10,
+    padding: 20,
+    paddingTop: 20,
+    backgroundColor: "#D32F2F",
   },
-  backText: {
-    color: "#fff",
+  backButton: { marginRight: 15 },
+  headerTitle: { fontSize: 20, fontWeight: "bold", color: "white" },
+  
+  content: { padding: 20 },
+  helperText: { color: "#666", marginBottom: 20, fontSize: 14 },
+
+  label: { fontSize: 14, fontWeight: "bold", color: "#333", marginBottom: 8, marginTop: 10 },
+  
+  pickerTrigger: {
+      backgroundColor: "white",
+      borderWidth: 1,
+      borderColor: "#DDD",
+      borderRadius: 8,
+      padding: 15,
+      flexDirection: "row",
+      justifyContent: "space-between",
+      alignItems: "center",
+  },
+  pickerText: { fontSize: 16, color: "#333" },
+  pickerOptions: {
+      backgroundColor: "white",
+      borderWidth: 1,
+      borderColor: "#DDD",
+      borderTopWidth: 0,
+      borderBottomLeftRadius: 8,
+      borderBottomRightRadius: 8,
+      overflow: "hidden",
+  },
+  pickerOption: {
+      padding: 15,
+      borderBottomWidth: 1,
+      borderBottomColor: "#F5F5F5",
+      flexDirection: 'row',
+      justifyContent: 'space-between'
+  },
+  optionText: { fontSize: 15, color: "#444" },
+
+  input: {
+    backgroundColor: "white",
+    borderWidth: 1,
+    borderColor: "#DDD",
+    borderRadius: 8,
+    padding: 15,
     fontSize: 16,
-    marginLeft: 5,
+    color: "#333",
+    marginBottom: 15,
   },
-  headerTitle: {
-    fontSize: 26,
-    fontWeight: "bold",
-    color: "#fff",
+  textArea: { height: 100 },
+  
+  addressRow: { flexDirection: 'row', alignItems: 'center' },
+  gpsButton: {
+      padding: 10,
+      backgroundColor: 'white',
+      marginLeft: 10,
+      borderRadius: 8,
+      borderWidth: 1,
+      borderColor: '#DDD',
+      height: 50,
+      width: 50,
+      justifyContent: 'center',
+      alignItems: 'center'
   },
-  headerSubtitle: {
-    fontSize: 16,
-    color: "#fff",
-    opacity: 0.9,
+  locationHint: { fontSize: 12, color: '#888', marginTop: 5, marginBottom: 15 },
+
+  photoButton: {
+      height: 180,
+      borderWidth: 2,
+      borderColor: "#DDD",
+      borderStyle: "dashed",
+      borderRadius: 12,
+      backgroundColor: "#FAFAFA",
+      justifyContent: "center",
+      alignItems: "center",
+      overflow: 'hidden',
+      position: 'relative'
   },
-  scrollContainer: {
+  photoPlaceholder: { alignItems: "center" },
+  photoText: { color: "#999", marginTop: 10 },
+  previewImage: { width: "100%", height: "100%" },
+  removeIcon: {
+      position: 'absolute',
+      top: 10,
+      right: 10,
+      backgroundColor: 'white',
+      borderRadius: 12,
+      elevation: 2
+  },
+
+  submitButton: {
+    backgroundColor: "#007BFF",
+    borderRadius: 12,
+    padding: 16,
+    flexDirection: "row",
+    justifyContent: "center",
+    alignItems: "center",
+    marginTop: 20,
+    elevation: 3,
+  },
+  submitText: { color: "white", fontSize: 18, fontWeight: "bold" },
+
+  // --- ESTILOS DO BOTTOM SHEET (FOTO) ---
+  modalOverlay: {
     flex: 1,
-    backgroundColor: "#F0F2F5",
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  bottomSheet: {
+    backgroundColor: 'white',
     borderTopLeftRadius: 25,
     borderTopRightRadius: 25,
-  },
-  scrollContent: {
     padding: 20,
+    paddingBottom: 40,
+    position: 'absolute',
+    bottom: 0,
+    left: 0,
+    right: 0,
+    elevation: 10,
   },
-  label: {
-    fontSize: 14,
-    fontWeight: "bold",
-    color: "#333",
-    marginBottom: 8,
-  },
-  pickerButton: {
-    flexDirection: "row",
-    justifyContent: "space-between",
-    alignItems: "center",
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-  },
-  pickerPlaceholder: {
-    fontSize: 16,
-    color: "#aaa",
-  },
-  pickerButtonText: {
-    fontSize: 16,
-    color: "#333",
-  },
-  inputMultiline: {
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 10,
-    padding: 15,
-    marginBottom: 15,
-    fontSize: 16,
-    textAlignVertical: "top",
-    height: 100,
-  },
-  addressContainer: {
-    flexDirection: "row",
-    backgroundColor: "#fff",
-    borderWidth: 1,
-    borderColor: "#e0e0e0",
-    borderRadius: 10,
-    paddingHorizontal: 15,
-    alignItems: "center",
-  },
-  inputAddress: {
-    flex: 1,
-    paddingVertical: 15,
-    fontSize: 16,
-  },
-  locationHelper: {
-    fontSize: 12,
-    color: "#666",
-    marginTop: 5,
-    marginBottom: 15,
-  },
-  photoBox: {
-    backgroundColor: "#fff",
-    borderWidth: 2,
-    borderColor: "#e0e0e0",
-    borderStyle: "dashed",
-    borderRadius: 10,
-    height: 130,
-    justifyContent: "center",
-    alignItems: "center",
+  bottomSheetHandle: {
+    width: 40,
+    height: 5,
+    backgroundColor: '#E0E0E0',
+    borderRadius: 2.5,
+    alignSelf: 'center',
     marginBottom: 20,
   },
-  photoText: {
-    fontSize: 14,
-    color: "#aaa",
-  },
-  submitButton: {
-    flexDirection: "row",
-    backgroundColor: "#007BFF",
-    borderRadius: 10,
-    padding: 18,
-    alignItems: "center",
-    justifyContent: "center",
-    marginTop: 10,
-    marginBottom: 40,
-  },
-  submitButtonText: {
-    color: "#fff",
-    fontSize: 16,
-    fontWeight: "bold",
-    marginLeft: 10,
-  },
-  modalBackdrop: {
-    flex: 1,
-    justifyContent: "flex-end",
-    backgroundColor: "rgba(0, 0, 0, 0.5)",
-  },
-  modalView: {
-    backgroundColor: "white",
-    borderTopLeftRadius: 20,
-    borderTopRightRadius: 20,
-    padding: 20,
-    maxHeight: "60%",
-  },
-  modalTitle: {
-    fontSize: 20,
-    fontWeight: "bold",
-    marginBottom: 20,
-    textAlign: "center",
-  },
-  modalItem: {
-    paddingVertical: 15,
-    borderBottomWidth: 1,
-    borderBottomColor: "#f0f0f0",
-  },
-  modalItemText: {
+  bottomSheetTitle: {
     fontSize: 18,
-    textAlign: "center",
+    fontWeight: 'bold',
+    color: '#333',
+    textAlign: 'center',
+    marginBottom: 30,
   },
-  modalCloseButton: {
-    backgroundColor: "#f0f0f0",
-    borderRadius: 10,
+  bottomSheetOptions: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    marginBottom: 30,
+  },
+  optionButton: {
+    alignItems: 'center',
+    width: 100,
+  },
+  optionIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  optionLabel: {
+    fontSize: 14,
+    color: '#555',
+    fontWeight: '500',
+  },
+  closeButton: {
+    backgroundColor: '#F5F5F5',
     padding: 15,
-    marginTop: 20,
+    borderRadius: 12,
+    alignItems: 'center',
   },
-  modalCloseText: {
-    textAlign: "center",
+  closeButtonText: {
+    color: '#D32F2F',
+    fontWeight: 'bold',
     fontSize: 16,
-    fontWeight: "bold",
-    color: "#007BFF",
+  },
+
+  // --- ESTILOS DO MODAL DE SUCESSO ---
+  successOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.6)',
+      justifyContent: 'center',
+      alignItems: 'center',
+      padding: 20,
+  },
+  successCard: {
+      backgroundColor: 'white',
+      borderRadius: 20,
+      padding: 25,
+      width: '90%',
+      alignItems: 'center',
+      elevation: 10,
+  },
+  successIconContainer: {
+      marginBottom: 15,
+  },
+  successTitle: {
+      fontSize: 22,
+      fontWeight: 'bold',
+      color: '#333',
+      marginBottom: 10,
+  },
+  successMessage: {
+      fontSize: 16,
+      color: '#666',
+      textAlign: 'center',
+      marginBottom: 25,
+      lineHeight: 22,
+  },
+  successButton: {
+      backgroundColor: '#2ECC71',
+      borderRadius: 12,
+      paddingVertical: 12,
+      paddingHorizontal: 30,
+      width: '100%',
+      alignItems: 'center',
+  },
+  successButtonText: {
+      color: 'white',
+      fontWeight: 'bold',
+      fontSize: 16,
   },
 });

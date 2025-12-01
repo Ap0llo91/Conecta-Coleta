@@ -16,39 +16,38 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../utils/supabaseClient';
 
-const primaryRed = '#D32F2F'; 
+const primaryGreen = '#2E7D32'; // Verde Escuro Profissional
 
-const RESIDUO_TYPES = [
-  'Resíduos biológicos (Grupo A)',
-  'Resíduos químicos (Grupo B)',
-  'Rejeitos radioativos (Grupo C)',
-  'Resíduos comuns (Grupo D)',
-  'Perfurocortantes (Grupo E)',
+const MATERIALS = [
+  { id: 'papel', label: 'Papel/Papelão' },
+  { id: 'plastico', label: 'Plástico' },
+  { id: 'metal', label: 'Metal' },
+  { id: 'vidro', label: 'Vidro' },
+  { id: 'eletronicos', label: 'Eletrônicos' },
 ];
 
 const FREQUENCY_TYPES = [
-  'Coleta única',
   'Semanal',
   'Quinzenal',
   'Mensal',
 ];
 
-export default function RequestHealthServiceScreen({ navigation }) {
+export default function RequestLargeVolumeScreen({ navigation }) {
+  // Estados de Dados da Empresa (Travados)
   const [razaoSocial, setRazaoSocial] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [endereco, setEndereco] = useState('');
-  
+
+  // Estados do Formulário
+  const [selectedMaterials, setSelectedMaterials] = useState({});
   const [volume, setVolume] = useState('');
+  const [selectedFreq, setSelectedFreq] = useState(FREQUENCY_TYPES[0]);
   const [responsavel, setResponsavel] = useState('');
   const [telefone, setTelefone] = useState('');
   const [observacoes, setObservacoes] = useState('');
 
-  const [selectedResiduo, setSelectedResiduo] = useState(RESIDUO_TYPES[0]);
-  const [showResiduoPicker, setShowResiduoPicker] = useState(false);
-
-  const [selectedFreq, setSelectedFreq] = useState(FREQUENCY_TYPES[0]);
+  // Controles de UI
   const [showFreqPicker, setShowFreqPicker] = useState(false);
-
   const [loadingData, setLoadingData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
@@ -56,8 +55,9 @@ export default function RequestHealthServiceScreen({ navigation }) {
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
-  const [alertType, setAlertType] = useState('warning'); 
+  const [alertType, setAlertType] = useState('warning');
 
+  // --- Helpers ---
   const showAlert = (title, message, type = 'warning') => {
     setAlertTitle(title);
     setAlertMessage(message);
@@ -77,7 +77,6 @@ export default function RequestHealthServiceScreen({ navigation }) {
   const handlePhoneChange = (text) => {
     let v = text.replace(/\D/g, "");
     v = v.substring(0, 11);
-
     if (v.length > 10) {
       v = v.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, "($1) $2 $3-$4");
     } else if (v.length > 6) { 
@@ -87,10 +86,17 @@ export default function RequestHealthServiceScreen({ navigation }) {
     } else {
       if (v.length > 0) v = v.replace(/^(\d*)/, "($1");
     }
-    
     setTelefone(v);
   };
 
+  const toggleMaterial = (id) => {
+    setSelectedMaterials(prev => ({
+      ...prev,
+      [id]: !prev[id]
+    }));
+  };
+
+  // --- Carregar Dados ---
   useEffect(() => {
     fetchCompanyData();
   }, []);
@@ -106,12 +112,11 @@ export default function RequestHealthServiceScreen({ navigation }) {
         .eq('usuario_id', user.id)
         .single();
 
-      // CORREÇÃO: Busca o endereço mais recente (sem depender de is_padrao)
       const { data: address } = await supabase
         .from('enderecos')
         .select('rua, numero, bairro')
         .eq('usuario_id', user.id)
-        .order('created_at', { ascending: false }) // Pega o último criado
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
@@ -119,6 +124,7 @@ export default function RequestHealthServiceScreen({ navigation }) {
         setRazaoSocial(profile.nome_razao_social || '');
         setCnpj(formatDocument(profile.cpf_cnpj || ''));
         
+        // Pré-preenche o telefone se disponível
         if (profile.telefone) {
             let tel = profile.telefone.replace(/\D/g, "");
             if (tel.length > 10) tel = tel.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, "($1) $2 $3-$4");
@@ -142,26 +148,38 @@ export default function RequestHealthServiceScreen({ navigation }) {
   };
 
   const handleSubmit = async () => {
+    // Validação
+    const hasMaterial = Object.values(selectedMaterials).some(val => val === true);
+    if (!hasMaterial) {
+        showAlert('Material Necessário', 'Selecione pelo menos um tipo de material.', 'warning');
+        return;
+    }
     if (!volume || !responsavel || !telefone) {
-      showAlert('Atenção', 'Por favor, preencha volume, responsável e telefone.', 'warning');
-      return;
+        showAlert('Campos Obrigatórios', 'Preencha volume, responsável e telefone.', 'warning');
+        return;
     }
 
     setSubmitting(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
+      // Monta a lista de materiais selecionados
+      const materiaisLista = MATERIALS
+        .filter(m => selectedMaterials[m.id])
+        .map(m => m.label)
+        .join(', ');
+
       const { error } = await supabase.from('chamados').insert({
         usuario_id: user.id,
-        tipo_problema: 'Resíduos de Saúde', 
-        descricao: `Resíduos de Saúde: ${selectedResiduo}. Freq: ${selectedFreq}. Vol: ${volume}kg. Obs: ${observacoes}. Resp: ${responsavel}, Tel: ${telefone}`,
+        tipo_problema: 'Grande Volume', 
+        descricao: `Grande Volume. Materiais: ${materiaisLista}. Freq: ${selectedFreq}. Vol: ${volume}kg/mês. Obs: ${observacoes}. Contato: ${responsavel}, Tel: ${telefone}`,
         status: 'Pendente',
         endereco_local: endereco, 
       });
 
       if (error) throw error;
 
-      showAlert('Solicitação Enviada!', 'Nossa equipe entrará em contato para agendar a coleta.', 'success');
+      showAlert('Solicitação Recebida!', 'Nossa equipe entrará em contato para alinhar a logística.', 'success');
 
     } catch (error) {
       console.log('Erro envio:', error);
@@ -177,6 +195,16 @@ export default function RequestHealthServiceScreen({ navigation }) {
           navigation.goBack();
       }
   };
+
+  // --- Componentes Internos ---
+  const CheckboxItem = ({ label, checked, onPress }) => (
+    <TouchableOpacity style={styles.checkboxRow} onPress={onPress}>
+        <View style={[styles.checkbox, checked && styles.checkboxChecked]}>
+            {checked && <Ionicons name="checkmark" size={16} color="white" />}
+        </View>
+        <Text style={styles.checkboxLabel}>{label}</Text>
+    </TouchableOpacity>
+  );
 
   const CustomPicker = ({ visible, onClose, options, onSelect, title }) => (
     <Modal visible={visible} transparent={true} animationType="slide" onRequestClose={onClose}>
@@ -214,7 +242,7 @@ export default function RequestHealthServiceScreen({ navigation }) {
         color = '#FFA000'; 
     } else if (type === 'success') {
         iconName = 'check-circle';
-        color = '#388E3C'; 
+        color = '#2E7D32'; // Verde Sucesso
     }
 
     return (
@@ -239,7 +267,7 @@ export default function RequestHealthServiceScreen({ navigation }) {
   if (loadingData) {
     return (
       <View style={styles.loadingContainer}>
-        <ActivityIndicator size="large" color={primaryRed} />
+        <ActivityIndicator size="large" color={primaryGreen} />
       </View>
     );
   }
@@ -253,8 +281,8 @@ export default function RequestHealthServiceScreen({ navigation }) {
             <Text style={styles.backText}>Voltar</Text>
           </TouchableOpacity>
         </View>
-        <Text style={styles.headerTitle}>Resíduos de Saúde</Text>
-        <Text style={styles.headerSubtitle}>Coleta especializada e regulamentada</Text>
+        <Text style={styles.headerTitle}>Grande Volume de Recicláveis</Text>
+        <Text style={styles.headerSubtitle}>Para empresas com grande produção</Text>
       </SafeAreaView>
 
       <KeyboardAvoidingView 
@@ -263,7 +291,8 @@ export default function RequestHealthServiceScreen({ navigation }) {
       >
         <ScrollView style={styles.content} contentContainerStyle={{ padding: 20 }}>
           
-          <Text style={styles.label}>Razão Social</Text>
+          {/* CAMPOS TRAVADOS */}
+          <Text style={styles.label}>Nome da Empresa</Text>
           <View style={styles.inputDisabledContainer}>
             <Text style={styles.inputDisabledText}>{razaoSocial}</Text>
             <Ionicons name="lock-closed-outline" size={16} color="#888" />
@@ -281,28 +310,35 @@ export default function RequestHealthServiceScreen({ navigation }) {
             <Ionicons name="lock-closed-outline" size={16} color="#888" />
           </View>
 
-          <Text style={styles.label}>Tipo de Resíduo</Text>
-          <TouchableOpacity style={styles.dropdown} onPress={() => setShowResiduoPicker(true)}>
-            <Text style={styles.dropdownText}>{selectedResiduo}</Text>
-            <Ionicons name="chevron-down" size={20} color="#666" />
-          </TouchableOpacity>
+          {/* FORMULÁRIO */}
+          <Text style={styles.label}>Tipos de Material (selecione)</Text>
+          <View style={styles.checkboxContainer}>
+            {MATERIALS.map(item => (
+                <CheckboxItem 
+                    key={item.id}
+                    label={item.label}
+                    checked={!!selectedMaterials[item.id]}
+                    onPress={() => toggleMaterial(item.id)}
+                />
+            ))}
+          </View>
 
-          <Text style={styles.label}>Volume Estimado (kg)</Text>
+          <Text style={styles.label}>Volume Total Estimado (kg/mês)</Text>
           <TextInput 
             style={styles.input} 
-            placeholder="Ex: 50" 
+            placeholder="Ex: 500" 
             keyboardType="numeric"
             value={volume}
             onChangeText={setVolume}
           />
 
-          <Text style={styles.label}>Frequência Desejada</Text>
+          <Text style={styles.label}>Frequência de Coleta</Text>
           <TouchableOpacity style={styles.dropdown} onPress={() => setShowFreqPicker(true)}>
             <Text style={styles.dropdownText}>{selectedFreq}</Text>
             <Ionicons name="chevron-down" size={20} color="#666" />
           </TouchableOpacity>
 
-          <Text style={styles.label}>Responsável Técnico</Text>
+          <Text style={styles.label}>Pessoa de Contato</Text>
           <TextInput 
             style={styles.input} 
             placeholder="Nome do responsável" 
@@ -310,7 +346,7 @@ export default function RequestHealthServiceScreen({ navigation }) {
             onChangeText={setResponsavel}
           />
 
-          <Text style={styles.label}>Telefone de Contato</Text>
+          <Text style={styles.label}>Telefone</Text>
           <TextInput 
             style={styles.input} 
             placeholder="(00) 00000-0000" 
@@ -323,18 +359,23 @@ export default function RequestHealthServiceScreen({ navigation }) {
           <Text style={styles.label}>Observações</Text>
           <TextInput 
             style={[styles.input, { height: 80, textAlignVertical: 'top' }]} 
-            placeholder="Informações adicionais sobre os resíduos" 
+            placeholder="Informações adicionais sobre os materiais ou logística" 
             multiline
             numberOfLines={3}
             value={observacoes}
             onChangeText={setObservacoes}
           />
 
-          <View style={styles.warningBox}>
-            <MaterialCommunityIcons name="biohazard" size={24} color={primaryRed} style={{marginRight: 10}} />
-            <Text style={styles.warningText}>
-              Serviço regulamentado pela ANVISA. Certificado de destinação final será fornecido após a coleta.
-            </Text>
+          <View style={styles.infoBox}>
+            <MaterialCommunityIcons name="calendar-check" size={24} color={primaryGreen} style={{marginRight: 10}} />
+            <View style={{flex: 1}}>
+                <Text style={styles.infoText}>
+                Nossa equipe entrará em contato para definir a logística.
+                </Text>
+                <Text style={[styles.infoText, { marginTop: 4, fontWeight: 'bold' }]}>
+                Certificado de reciclagem fornecido mensalmente.
+                </Text>
+            </View>
           </View>
 
           <TouchableOpacity 
@@ -353,13 +394,6 @@ export default function RequestHealthServiceScreen({ navigation }) {
         </ScrollView>
       </KeyboardAvoidingView>
 
-      <CustomPicker 
-        visible={showResiduoPicker} 
-        onClose={() => setShowResiduoPicker(false)} 
-        options={RESIDUO_TYPES} 
-        onSelect={setSelectedResiduo}
-        title="Selecione o Tipo de Resíduo"
-      />
       <CustomPicker 
         visible={showFreqPicker} 
         onClose={() => setShowFreqPicker(false)} 
@@ -384,7 +418,7 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: 'center', alignItems: 'center' },
 
   header: {
-    backgroundColor: primaryRed,
+    backgroundColor: primaryGreen,
     paddingHorizontal: 20,
     paddingBottom: 20,
     paddingTop: 10,
@@ -435,10 +469,30 @@ const styles = StyleSheet.create({
   },
   dropdownText: { fontSize: 15, color: '#333' },
 
-  warningBox: {
-    backgroundColor: '#FFEBEE',
+  // Checkbox Styles
+  checkboxContainer: { marginVertical: 5 },
+  checkboxRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 10 },
+  checkbox: {
+      width: 24,
+      height: 24,
+      borderRadius: 4,
+      borderWidth: 2,
+      borderColor: '#555',
+      justifyContent: 'center',
+      alignItems: 'center',
+      marginRight: 10,
+      backgroundColor: 'white'
+  },
+  checkboxChecked: {
+      backgroundColor: '#333',
+      borderColor: '#333'
+  },
+  checkboxLabel: { fontSize: 15, color: '#333' },
+
+  infoBox: {
+    backgroundColor: '#E8F5E9', // Verde bem claro
     borderWidth: 1,
-    borderColor: '#FFCDD2',
+    borderColor: '#C8E6C9',
     borderRadius: 10,
     padding: 15,
     flexDirection: 'row',
@@ -446,10 +500,10 @@ const styles = StyleSheet.create({
     marginTop: 25,
     marginBottom: 15,
   },
-  warningText: { color: '#C62828', fontSize: 13, flex: 1, lineHeight: 18 },
+  infoText: { color: '#2E7D32', fontSize: 13, lineHeight: 18 },
 
   submitButton: {
-    backgroundColor: primaryRed,
+    backgroundColor: '#00A859', // Verde vibrante do botão da imagem
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: 'center',

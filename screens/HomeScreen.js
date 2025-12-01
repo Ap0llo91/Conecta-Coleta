@@ -6,7 +6,6 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Alert,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import {
@@ -23,11 +22,13 @@ import { useFocusEffect } from "@react-navigation/native";
 const CYCLE_MINUTES = 20; // O caminhão leva 20 min para chegar
 const MAX_DISTANCE_KM = 10.0; // Começa a 10km de distância
 
+// Pontos fixos para cálculo de proximidade (Exemplo)
 const ECOPONTOS = [
   { title: "Ecoponto Boa Viagem", latitude: -8.1275, longitude: -34.902 },
   { title: "Ecoponto Torre", latitude: -8.052, longitude: -34.91 },
   { title: "Ecoponto Casa Forte", latitude: -8.037, longitude: -34.919 },
   { title: "Ecoponto Ibura", latitude: -8.13, longitude: -34.94 },
+  { title: "Ecoponto Jaqueira", latitude: -8.0375, longitude: -34.9065 },
 ];
 
 const DICAS = [
@@ -58,7 +59,7 @@ const EtaCard = ({ minutes, onPress }) => (
     {minutes <= 1 ? (
       <View style={{ alignItems: "center", marginVertical: 10 }}>
         <Text style={styles.etaTimeSmall}>CHEGANDO</Text>
-        <Text style={styles.etaMinutes}>AGORA</Text>
+        <Text style={styles.etaStatusText}>AGORA</Text>
       </View>
     ) : (
       <>
@@ -150,7 +151,9 @@ export default function HomeScreen({ navigation }) {
   const [userAddress, setUserAddress] = useState("Carregando localização...");
   const [etaMinutes, setEtaMinutes] = useState(15);
 
-  // Coordenadas do usuário (baseadas no endereço cadastrado)
+  // Controle para registrar no banco apenas uma vez por ciclo
+  const [hasRegistered, setHasRegistered] = useState(false);
+
   const [userCoords, setUserCoords] = useState({
     latitude: -8.0476,
     longitude: -34.877,
@@ -174,55 +177,75 @@ export default function HomeScreen({ navigation }) {
     return R * c;
   };
 
-  // --- LÓGICA DE SIMULAÇÃO BASEADA NO TEMPO ---
-  // Calcula a distância "virtual" do caminhão até a casa
-  // Ciclo: 100% da distância -> 0% da distância (Chegada)
   const getSimulatedDistanceKm = () => {
     const CYCLE_MS = CYCLE_MINUTES * 60 * 1000;
     const now = Date.now();
-
-    // Progresso de 0.0 a 1.0 dentro do ciclo
     const rawProgress = (now % CYCLE_MS) / CYCLE_MS;
-
-    // Inverte: Começa em 1.0 (Longe) e vai até 0.0 (Chegou)
-    // Para parecer que está vindo
     const progressInv = 1.0 - rawProgress;
-
     return progressInv * MAX_DISTANCE_KM;
   };
 
-  // Atualiza ETA periodicamente
   useEffect(() => {
     const updateEta = () => {
       const distKm = getSimulatedDistanceKm();
-
-      // Velocidade média simulada: 30 km/h = 0.5 km/min
       const speedKmH = 30;
       const timeHours = distKm / speedKmH;
-
-      // Adicionamos um pequeno "buffer" para não ficar zerado muito tempo
       let timeMinutes = Math.ceil(timeHours * 60);
-
-      // Se estiver no finalzinho do ciclo (último minuto), mostra "CHEGANDO"
       if (timeMinutes < 1) timeMinutes = 0;
-
       setEtaMinutes(timeMinutes);
     };
-
     updateEta();
-    const interval = setInterval(updateEta, 5000); // Atualiza a cada 5s
+    const interval = setInterval(updateEta, 5000);
     return () => clearInterval(interval);
   }, []);
 
-  // Carregar dados do usuário (Nome e Endereço do Banco)
+  // --- LÓGICA DE REGISTRO SILENCIOSO NO SUPABASE ---
   useEffect(() => {
-    const initData = async () => {
+    // 1. Gatilho: Se faltar 1 min ou menos e ainda não registrou
+    if (etaMinutes <= 1 && !hasRegistered) {
+      saveNotificationToDb(); // Salva no banco (histórico)
+      setHasRegistered(true); // Trava para não duplicar
+    }
+
+    // 2. Reset: Se o tempo voltar a ser alto (ciclo reiniciou), libera a trava
+    if (etaMinutes > 5 && hasRegistered) {
+      setHasRegistered(false);
+    }
+  }, [etaMinutes]);
+
+  const saveNotificationToDb = async () => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("notificacoes").insert({
+          usuario_id: user.id,
+          titulo: "Caminhão Chegando",
+          descricao: "O veículo de coleta está na sua região.",
+          tipo: "truck",
+          lida: false,
+        });
+        // console.log("Notificação salva no histórico silenciosamente.");
+      }
+    } catch (error) {
+      console.log("Erro ao salvar histórico:", error);
+    }
+  };
+
+  useFocusEffect(
+    useCallback(() => {
+      fetchUserData();
+    }, [])
+  );
+
+  const fetchUserData = async () => {
+    try {
       const {
         data: { user },
       } = await supabase.auth.getUser();
 
       if (user) {
-        // 1. Pega Nome
         const { data: profile } = await supabase
           .from("usuarios")
           .select("nome_razao_social")
@@ -230,19 +253,26 @@ export default function HomeScreen({ navigation }) {
           .single();
         if (profile) setUserName(profile.nome_razao_social);
 
-        // 2. Pega Endereço do Banco (Prioridade Total)
         const { data: addressData } = await supabase
           .from("enderecos")
           .select("*")
           .eq("usuario_id", user.id)
-          .eq("is_padrao", true)
+          .order("created_at", { ascending: false })
+          .limit(1)
           .maybeSingle();
 
         if (addressData) {
-          const fullAddr = `${addressData.rua}, ${addressData.numero} - ${addressData.bairro}`;
+          let fullAddr = "";
+          if (addressData.rua) {
+            fullAddr = addressData.rua;
+            if (addressData.numero) fullAddr += `, ${addressData.numero}`;
+            if (addressData.bairro) fullAddr += ` - ${addressData.bairro}`;
+          } else {
+            fullAddr = "Endereço incompleto";
+          }
+
           setUserAddress(fullAddr);
 
-          // Geocodifica o endereço do banco para coordenadas
           try {
             const searchStr = `${addressData.rua}, ${addressData.numero}, ${addressData.bairro}, Recife`;
             const geocoded = await Location.geocodeAsync(searchStr);
@@ -252,31 +282,36 @@ export default function HomeScreen({ navigation }) {
                 latitude: geocoded[0].latitude,
                 longitude: geocoded[0].longitude,
               });
+            } else {
+              getLocationGPS();
             }
           } catch (e) {
-            console.log("Erro no geocoding:", e);
+            getLocationGPS();
           }
         } else {
           setUserAddress("Endereço não cadastrado");
-          // Se não tiver endereço, tenta pegar GPS como fallback silencioso
-          try {
-            let { status } = await Location.requestForegroundPermissionsAsync();
-            if (status === "granted") {
-              let location = await Location.getCurrentPositionAsync({});
-              setUserCoords(location.coords);
-            }
-          } catch (e) {}
+          getLocationGPS();
         }
       }
-
+    } catch (error) {
+      console.log("Erro ao carregar home:", error);
+      setUserAddress("Erro ao carregar endereço");
+    } finally {
       setLoading(false);
       setLoadingLocation(false);
-    };
+    }
+  };
 
-    initData();
-  }, []);
+  const getLocationGPS = async () => {
+    try {
+      let { status } = await Location.requestForegroundPermissionsAsync();
+      if (status === "granted") {
+        let location = await Location.getCurrentPositionAsync({});
+        setUserCoords(location.coords);
+      }
+    } catch (e) {}
+  };
 
-  // Recalcula Ecoponto mais próximo quando as coordenadas do usuário mudam
   useEffect(() => {
     if (!userCoords) return;
 
@@ -367,7 +402,7 @@ const styles = StyleSheet.create({
     backgroundColor: "#F0F2F5",
   },
   container: { flex: 1, backgroundColor: "#F0F2F5" },
-  scrollContent: { paddingHorizontal: 20, paddingBottom: 30 },
+  scrollContent: { paddingHorizontal: 20, paddingBottom: 15 },
   header: { marginTop: 10, marginBottom: 20 },
   headerTitle: { fontSize: 24, fontWeight: "bold", color: "#333" },
   locationText: { fontSize: 14, color: "#666", flex: 1 },
@@ -402,6 +437,14 @@ const styles = StyleSheet.create({
     fontSize: 42,
     fontWeight: "bold",
     marginTop: 10,
+  },
+  etaStatusText: {
+    color: "#fff",
+    fontSize: 18,
+    fontWeight: "bold",
+    letterSpacing: 1,
+    marginTop: 5,
+    marginBottom: 5,
   },
   etaMinutes: {
     color: "#fff",
@@ -476,7 +519,7 @@ const styles = StyleSheet.create({
     borderRadius: 15,
     padding: 15,
     alignItems: "flex-start",
-    marginBottom: 40,
+    marginBottom: 15,
     borderWidth: 1,
     borderColor: "#2E8B57",
   },

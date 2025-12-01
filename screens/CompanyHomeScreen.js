@@ -116,24 +116,24 @@ export default function CompanyHomeScreen({ navigation }) {
       >
         <View style={{ marginTop: 5 }} />
 
-        {/* 1. Action Cards (Originais) */}
+        {/* 1. Action Cards */}
         <ActionCard 
           title="Resíduos Especiais"
           description="Coleta de resíduos de saúde, óleo de cozinha e materiais tóxicos"
           icon="biohazard"
           color="#E53935" 
           iconLib="MaterialCommunityIcons"
-          // NAVEGAÇÃO ATUALIZADA PARA A TELA NOVA
           onPress={() => navigation.navigate('ServicesEmpresa')} 
         />
 
+        {/* CORREÇÃO AQUI: Linkando para a tela de Grande Volume */}
         <ActionCard 
           title="Grande Volume"
           description="Coleta de recicláveis e resíduos em grande quantidade"
           icon="trash-can-outline" 
           color="#43A047" 
           iconLib="MaterialCommunityIcons"
-          onPress={() => alert('Funcionalidade em breve!')}
+          onPress={() => navigation.navigate('RequestLargeVolume')} // Corrigido!
         />
 
         <ActionCard 
@@ -145,7 +145,7 @@ export default function CompanyHomeScreen({ navigation }) {
           onPress={() => navigation.navigate('MapScreen')} 
         />
 
-        {/* 2. Secção: Status Recentes (NOVO) */}
+        {/* 2. Secção: Status Recentes */}
         <Text style={styles.subSectionTitle}>Status Recentes</Text>
         <View style={styles.statusRow}>
           <StatusCard 
@@ -165,7 +165,7 @@ export default function CompanyHomeScreen({ navigation }) {
           />
         </View>
 
-        {/* 3. Cartão: Certificados (NOVO) */}
+        {/* 3. Cartão: Certificados */}
         <TouchableOpacity style={styles.certCard} onPress={() => alert('Abrir Certificados')}>
           <View style={{flexDirection: 'row', alignItems: 'flex-start'}}>
             <MaterialCommunityIcons name="file-certificate-outline" size={32} color="#ACA183" style={{marginTop: 2}} />
@@ -179,7 +179,7 @@ export default function CompanyHomeScreen({ navigation }) {
           </View>
         </TouchableOpacity>
 
-        {/* 4. Painel: Informações Importantes (NOVO) */}
+        {/* 4. Painel: Informações Importantes */}
         <View style={styles.infoBox}>
           <Text style={styles.infoTitle}>Informações Importantes</Text>
           <InfoItem text="Certificados fornecidos para todas as coletas" />

@@ -6,7 +6,7 @@ import {
   TouchableOpacity, 
   StyleSheet, 
   ScrollView, 
-  Alert,
+  Modal, 
   Platform,
   KeyboardAvoidingView
 } from 'react-native';
@@ -14,7 +14,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons'; 
 import { supabase } from '../utils/supabaseClient';
 
-// COR ORIGINAL DA EMPRESA (Amarelo/Laranja)
+// COR DA EMPRESA (Amarelo/Laranja)
 const primaryColor = '#F0B90B'; 
 
 export default function CompanyAuthScreen({ navigation, route }) {
@@ -65,16 +65,26 @@ const formatCNPJ = (text) => {
 };
 
 const formatPhone = (text) => {
-  const cleaned = text.replace(/\D/g, '');
-  if (cleaned.length <= 10) {
-    return cleaned
-      .replace(/^(\d{2})(\d)/, '($1) $2')
-      .replace(/(\d{4})(\d)/, '$1-$2');
+  let v = text.replace(/\D/g, "");
+  v = v.substring(0, 11);
+  if (v.length > 2 && v[2] === "9") {
+    // Celular 9 dígitos: (XX) 9 XXXX-XXXX
+    if (v.length > 7) {
+      v = v.replace(/^(\d{2})(\d{1})(\d{4})(\d{1,4})$/, "($1) $2 $3-$4");
+    } else {
+      v = v.replace(/^(\d{2})(\d{1})(\d{0,4})$/, "($1) $2 $3");
+    }
   } else {
-    return cleaned
-      .replace(/^(\d{2})(\d)/, '($1) $2')
-      .replace(/(\d)(\d{4})(\d)/, '$1 $2-$3');
+    // Fixo ou celular antigo: (XX) XXXX-XXXX
+    if (v.length > 6) {
+      v = v.replace(/^(\d{2})(\d{4})(\d{1,4})$/, "($1) $2-$3");
+    } else if (v.length > 2) {
+      v = v.replace(/^(\d{2})(\d{0,4})$/, "($1) $2");
+    } else {
+      v = v.replace(/^(\d*)/, "($1");
+    }
   }
+  return v;
 };
 
 // --- Componente de Login ---
@@ -83,11 +93,24 @@ const LoginForm = ({ navigation }) => {
   const [password, setPassword] = useState('');
   const [loading, setLoading] = useState(false);
 
+  // Estados do Alerta Bonito
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState('error'); 
+
+  const showAlert = (title, message, type = 'error') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
   const handleLogin = async () => {
     if (loading) return;
     
     if (!email || !password) {
-      Alert.alert('Erro', 'Preencha todos os campos.');
+      showAlert('Campos Vazios', 'Por favor, preencha seu email e senha.');
       return;
     }
     
@@ -99,10 +122,11 @@ const LoginForm = ({ navigation }) => {
     });
     
     if (error) {
-      Alert.alert('Erro no Login', error.message);
+      showAlert('Erro no Login', 'Email ou senha incorretos. Tente novamente.');
       setLoading(false);
       return;
     }
+    // Sucesso é tratado pelo onAuthStateChange no App.js
   };
 
   return (
@@ -141,6 +165,15 @@ const LoginForm = ({ navigation }) => {
       <TouchableOpacity onPress={() => navigation.navigate('ForgotPassword')} style={{alignSelf: 'center', marginTop: 15}}>
         <Text style={styles.linkText}>Esqueceu a senha?</Text>
       </TouchableOpacity>
+
+      {/* Modal de Alerta */}
+      <CustomAlert 
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
     </View>
   );
 };
@@ -154,13 +187,26 @@ const RegisterForm = ({ navigation }) => {
   const [password, setPassword] = useState('');
   
   // Endereço
-  const [cep, setCep] = useState(''); // Novo Campo
+  const [cep, setCep] = useState(''); 
   const [rua, setRua] = useState('');
   const [numero, setNumero] = useState('');
   const [semNumero, setSemNumero] = useState(false);
   const [bairro, setBairro] = useState('');
   
   const [loading, setLoading] = useState(false);
+
+  // Estados do Alerta Bonito
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState('error');
+
+  const showAlert = (title, message, type = 'error') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
 
   const handleCnpjChange = (text) => setCnpj(formatCNPJ(text));
   const handlePhoneChange = (text) => setTelefone(formatPhone(text));
@@ -177,9 +223,9 @@ const RegisterForm = ({ navigation }) => {
   const handleRegister = async () => {
     if (loading) return;
     
-    // Validação inclui o CEP agora
+    // 1. Validação simples
     if (!email || !password || !razaoSocial || !cnpj || !rua || !bairro || !cep || (!numero && !semNumero)) {
-        Alert.alert('Atenção', 'Por favor, preencha todos os campos obrigatórios, incluindo o CEP.');
+        showAlert('Atenção', 'Por favor, preencha todos os campos obrigatórios, incluindo o CEP.', 'warning');
         return;
     }
 
@@ -191,34 +237,39 @@ const RegisterForm = ({ navigation }) => {
     });
 
     if (authError) {
-      Alert.alert('Erro no Cadastro', authError.message);
+      showAlert('Erro no Cadastro', authError.message);
       setLoading(false);
       return;
     }
 
     if (!authData.user) {
-        Alert.alert('Erro', 'Não foi possível criar o usuário.');
+        showAlert('Erro', 'Não foi possível criar o usuário.');
         setLoading(false);
         return;
     }
+
+    // Limpa máscaras
+    const cnpjLimpo = cnpj.replace(/\D/g, "");
+    const telLimpo = telefone.replace(/\D/g, "");
 
     const { error: dbError } = await supabase
       .from('usuarios')
       .insert({ 
         usuario_id: authData.user.id,
         tipo_usuario: 'CNPJ', 
-        cpf_cnpj: cnpj, 
+        cpf_cnpj: cnpjLimpo, 
         nome_razao_social: razaoSocial,
-        email: email
+        email: email,
+        telefone: telLimpo
       });
 
     if (dbError) {
-      Alert.alert('Erro ao salvar dados', dbError.message);
+      showAlert('Erro ao salvar dados', dbError.message);
       setLoading(false);
       return;
     }
     
-    // Salva Rua separada (padrão novo)
+    // Salva Endereço
     const { error: addrError } = await supabase
       .from('enderecos')
       .insert({
@@ -226,24 +277,33 @@ const RegisterForm = ({ navigation }) => {
         rua: rua, 
         numero: semNumero ? 'S/N' : numero,
         bairro: bairro,
-        cep: cep, // Salva o CEP digitado
+        cep: cep,
         latitude: 0,
         longitude: 0,
         is_padrao: true
       });
 
     if (addrError) {
-      Alert.alert('Erro ao salvar endereço', addrError.message);
+      showAlert('Erro ao salvar endereço', addrError.message);
       setLoading(false);
       return;
     }
 
     setLoading(false);
-    Alert.alert(
-        'Sucesso!', 
-        'Conta criada com sucesso! Verifique seu e-mail para confirmar.',
-        [{ text: 'OK', onPress: () => navigation.navigate('Welcome') }]
-    );
+    
+    // Alerta de Sucesso
+    setAlertTitle('Sucesso!');
+    setAlertMessage('Conta criada com sucesso! Você será redirecionado em instantes.');
+    setAlertType('success');
+    setAlertVisible(true);
+  };
+
+  const handleAlertClose = () => {
+      setAlertVisible(false);
+      // MUDANÇA PRINCIPAL AQUI:
+      // Removemos o 'navigation.navigate("Welcome")'.
+      // Agora, se o login for automático (padrão do Supabase em dev), o App.js vai perceber e trocar para a tela da Empresa.
+      // Se não trocar, o usuário fecha o alerta e continua na tela (ou volta manualmente para logar).
   };
 
   return (
@@ -285,7 +345,7 @@ const RegisterForm = ({ navigation }) => {
         keyboardType="phone-pad" 
         value={telefone} 
         onChangeText={handlePhoneChange} 
-        maxLength={15}
+        maxLength={16}
       />
 
       <Text style={[styles.sectionHeader, { marginTop: 10 }]}>Endereço</Text>
@@ -360,8 +420,49 @@ const RegisterForm = ({ navigation }) => {
       >
         <Text style={styles.buttonText}>{loading ? 'Criando Conta...' : 'Cadastrar Empresa'}</Text>
       </TouchableOpacity>
+
+      {/* Modal de Alerta */}
+      <CustomAlert 
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={handleAlertClose}
+      />
     </View>
   );
+};
+
+// --- Componente Reutilizável de Alerta Bonito ---
+const CustomAlert = ({ visible, title, message, type, onClose }) => {
+    let iconName = 'alert-circle';
+    let color = '#D92D20'; // Vermelho (Erro)
+
+    if (type === 'warning') {
+        iconName = 'alert';
+        color = '#F0B90B'; // Amarelo (Atenção)
+    } else if (type === 'success') {
+        iconName = 'check-circle';
+        color = '#2ECC71'; // Verde (Sucesso)
+    }
+
+    return (
+        <Modal transparent={true} visible={visible} animationType="fade">
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <MaterialCommunityIcons name={iconName} size={60} color={color} style={{marginBottom: 15}} />
+                    <Text style={styles.modalTitle}>{title}</Text>
+                    <Text style={styles.modalMessage}>{message}</Text>
+                    <TouchableOpacity 
+                        style={[styles.modalButton, { backgroundColor: color }]} 
+                        onPress={onClose}
+                    >
+                        <Text style={styles.modalButtonText}>OK</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </Modal>
+    );
 };
 
 const styles = StyleSheet.create({
@@ -401,7 +502,7 @@ const styles = StyleSheet.create({
   sectionHeader: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: primaryColor, // Amarelo
+    color: primaryColor,
     marginBottom: 15,
     marginTop: 5,
   },
@@ -441,14 +542,14 @@ const styles = StyleSheet.create({
     height: 24,
     borderRadius: 6,
     borderWidth: 2,
-    borderColor: primaryColor, // Borda Amarela
+    borderColor: primaryColor,
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: 'transparent',
     marginRight: 8,
   },
   checkboxChecked: {
-    backgroundColor: primaryColor, // Fundo Amarelo quando marcado
+    backgroundColor: primaryColor,
   },
   checkboxLabel: {
     fontSize: 14,
@@ -464,7 +565,7 @@ const styles = StyleSheet.create({
     shadowOffset: { width: 0, height: 2 },
     shadowOpacity: 0.1,
     shadowRadius: 4,
-    backgroundColor: primaryColor, // Botão Amarelo
+    backgroundColor: primaryColor,
   },
   buttonText: {
     color: '#fff',
@@ -472,8 +573,53 @@ const styles = StyleSheet.create({
     fontWeight: 'bold',
   },
   linkText: {
-    color: primaryColor, // Link Amarelo
+    color: primaryColor,
     fontWeight: '600',
     fontSize: 14,
   },
+  
+  // --- Estilos do Modal Bonito ---
+  modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+  },
+  modalContent: {
+      width: '85%',
+      backgroundColor: 'white',
+      borderRadius: 20,
+      padding: 30,
+      alignItems: 'center',
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+  },
+  modalTitle: {
+      fontSize: 22,
+      fontWeight: 'bold',
+      color: '#333',
+      marginBottom: 10,
+      textAlign: 'center',
+  },
+  modalMessage: {
+      fontSize: 16,
+      color: '#666',
+      textAlign: 'center',
+      marginBottom: 25,
+      lineHeight: 22,
+  },
+  modalButton: {
+      paddingVertical: 12,
+      paddingHorizontal: 40,
+      borderRadius: 25,
+      elevation: 2,
+  },
+  modalButtonText: {
+      color: 'white',
+      fontWeight: 'bold',
+      fontSize: 16,
+  }
 });

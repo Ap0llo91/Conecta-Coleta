@@ -9,33 +9,45 @@ import {
   Modal,
   ActivityIndicator,
   Alert,
-  KeyboardAvoidingView, // <--- Importado
-  Platform // <--- Importado
+  KeyboardAvoidingView,
+  Platform
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 
+// Importação do Supabase
+import { supabase } from "../utils/supabaseClient"; 
+
 const RequestCataTrecoScreen = ({ navigation }) => {
   const [loadingLocation, setLoadingLocation] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   // Estados do Formulário
   const [endereco, setEndereco] = useState("");
+  const [coords, setCoords] = useState(null);
   const [pontoReferencia, setPontoReferencia] = useState("");
   const [outrosItens, setOutrosItens] = useState("");
   const [quantidade, setQuantidade] = useState("");
   const [telefone, setTelefone] = useState("");
 
-  // Estado do Dropdown de Período
-  const [periodo, setPeriodo] = useState("");
+  // Estados dos Modais
   const [modalPeriodoVisible, setModalPeriodoVisible] = useState(false);
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
+  const [alertModalVisible, setAlertModalVisible] = useState(false); // NOVO: Modal de Alerta/Erro
+
+  // Estados para Conteúdo do Alerta
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState("warning"); // 'warning' ou 'error'
+
+  const [periodo, setPeriodo] = useState("");
   const periodos = [
     "Manhã (8h - 12h)",
     "Tarde (13h - 17h)",
     "Qualquer horário",
   ];
 
-  // Estado dos Checkboxes (Itens)
   const [itensSelecionados, setItensSelecionados] = useState({
     sofa: false,
     geladeira: false,
@@ -46,45 +58,125 @@ const RequestCataTrecoScreen = ({ navigation }) => {
     outros: false,
   });
 
-  // Função para alternar checkbox
+  // Função auxiliar para mostrar o alerta bonito
+  const showCustomAlert = (title, message, type = "warning") => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertModalVisible(true);
+  };
+
+  const formatPhone = (text) => {
+    let cleaned = text.replace(/\D/g, "");
+    if (cleaned.length > 11) cleaned = cleaned.substring(0, 11);
+
+    if (cleaned.length === 0) return "";
+    if (cleaned.length <= 2) return `(${cleaned}`;
+    if (cleaned.length <= 3) return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2)}`;
+    if (cleaned.length <= 7) return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 3)} ${cleaned.substring(3)}`;
+    return `(${cleaned.substring(0, 2)}) ${cleaned.substring(2, 3)} ${cleaned.substring(3, 7)}-${cleaned.substring(7)}`;
+  };
+
+  const handlePhoneChange = (text) => {
+    setTelefone(formatPhone(text));
+  };
+
   const toggleItem = (key) => {
     setItensSelecionados((prev) => ({ ...prev, [key]: !prev[key] }));
   };
 
-  // Função de Localização
   const handleGetLocation = async () => {
     if (loadingLocation) return;
     let { status } = await Location.requestForegroundPermissionsAsync();
     if (status !== "granted") {
-      Alert.alert(
-        "Permissão negada",
-        "Não podemos pegar sua localização sem permissão."
-      );
+      showCustomAlert("Permissão negada", "Necessário para preencher endereço.", "error");
       return;
     }
     setLoadingLocation(true);
     try {
       let location = await Location.getCurrentPositionAsync({});
+      
+      setCoords({
+          latitude: location.coords.latitude,
+          longitude: location.coords.longitude
+      });
+
       let geocode = await Location.reverseGeocodeAsync(location.coords);
       if (geocode.length > 0) {
         const g = geocode[0];
-        const addressFormatted = `${g.street || ""}, ${g.streetNumber || ""}, ${
-          g.subregion || ""
-        }`;
+        const addressFormatted = `${g.street || ""}, ${g.streetNumber || ""}, ${g.subregion || ""}`;
         setEndereco(addressFormatted);
-      } else {
-        Alert.alert("Erro", "Endereço não encontrado.");
       }
     } catch (error) {
-      Alert.alert("Erro", "Falha ao obter localização.");
+      showCustomAlert("Erro", "Falha ao obter localização.", "error");
     } finally {
       setLoadingLocation(false);
     }
   };
 
+  const handleAgendar = async () => {
+    // 1. Validação (Substituindo Alert nativo)
+    if (!endereco || !telefone || !quantidade) {
+        showCustomAlert("Campos Obrigatórios", "Por favor, preencha o endereço, telefone e a quantidade.", "warning");
+        return;
+    }
+
+    setLoading(true);
+
+    try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (!user) {
+            showCustomAlert("Sessão Expirada", "Faça login novamente.", "error");
+            setLoading(false);
+            return;
+        }
+
+        const itensAtivos = Object.keys(itensSelecionados)
+            .filter(key => itensSelecionados[key])
+            .map(key => key.charAt(0).toUpperCase() + key.slice(1));
+
+        let descricaoFinal = `Itens: ${itensAtivos.join(", ")}`;
+        
+        if (outrosItens.trim()) descricaoFinal += `. Detalhes: ${outrosItens}`;
+        if (pontoReferencia.trim()) descricaoFinal += `. Ref: ${pontoReferencia}`;
+        if (periodo) descricaoFinal += `. Pref: ${periodo}`;
+        descricaoFinal += `. Tel: ${telefone}. Qtd: ${quantidade}`;
+
+        const { error } = await supabase
+            .from('chamados')
+            .insert({
+                usuario_id: user.id,
+                tipo_problema: 'Cata-Treco',
+                descricao: descricaoFinal,
+                endereco_local: endereco,
+                latitude: coords ? coords.latitude : null,
+                longitude: coords ? coords.longitude : null,
+                status: 'Pendente'
+            });
+
+        if (error) {
+            console.error("Erro Supabase:", error);
+            throw error;
+        }
+
+        setSuccessModalVisible(true);
+
+    } catch (error) {
+        console.error("Erro ao agendar:", error);
+        showCustomAlert("Erro no Envio", "Não foi possível registrar o pedido. Verifique sua conexão.", "error");
+    } finally {
+        setLoading(false);
+    }
+  };
+
+  const closeSuccessModal = () => {
+      setSuccessModalVisible(false);
+      navigation.goBack();
+  };
+
   return (
     <SafeAreaView style={styles.container}>
-      {/* Cabeçalho Roxo */}
       <View style={styles.header}>
         <TouchableOpacity
           onPress={() => navigation.goBack()}
@@ -99,13 +191,11 @@ const RequestCataTrecoScreen = ({ navigation }) => {
         </Text>
       </View>
 
-      {/* WRAPPER KEYBOARD AVOIDING VIEW ADICIONADO AQUI */}
       <KeyboardAvoidingView 
         behavior={Platform.OS === "ios" ? "padding" : "height"}
         style={{ flex: 1 }}
       >
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
-          {/* Endereço com GPS */}
           <Text style={styles.label}>Endereço Completo</Text>
           <View style={styles.addressContainer}>
             <TextInput
@@ -134,7 +224,6 @@ const RequestCataTrecoScreen = ({ navigation }) => {
             onChangeText={setPontoReferencia}
           />
 
-          {/* CHECKBOXES DE ITENS */}
           <Text style={styles.label}>Itens a coletar</Text>
           <View style={styles.checkboxGroup}>
             <Checkbox
@@ -196,13 +285,13 @@ const RequestCataTrecoScreen = ({ navigation }) => {
           <Text style={styles.label}>Telefone de Contato</Text>
           <TextInput
             style={styles.input}
-            placeholder="(81) 99999-9999"
+            placeholder="(81) 9 9999-9999"
             keyboardType="phone-pad"
             value={telefone}
-            onChangeText={setTelefone}
+            onChangeText={handlePhoneChange}
+            maxLength={16}
           />
 
-          {/* Dropdown de Período */}
           <Text style={styles.label}>Período Preferencial</Text>
           <TouchableOpacity
             style={styles.dropdown}
@@ -216,9 +305,14 @@ const RequestCataTrecoScreen = ({ navigation }) => {
 
           <TouchableOpacity
             style={styles.submitButton}
-            onPress={() => console.log("Agendando...")}
+            onPress={handleAgendar}
+            disabled={loading}
           >
-            <Text style={styles.submitButtonText}>Agendar Coleta</Text>
+            {loading ? (
+                <ActivityIndicator color="white" />
+            ) : (
+                <Text style={styles.submitButtonText}>Agendar Coleta</Text>
+            )}
           </TouchableOpacity>
 
           <View style={{ height: 40 }} />
@@ -255,11 +349,61 @@ const RequestCataTrecoScreen = ({ navigation }) => {
           </View>
         </View>
       </Modal>
+
+      {/* Modal de Sucesso */}
+      <Modal
+        visible={successModalVisible}
+        animationType="fade"
+        transparent={true}
+      >
+        <View style={styles.centerModalOverlay}>
+            <View style={styles.card}>
+                <Ionicons name="checkmark-circle" size={80} color="#4CAF50" style={{ marginBottom: 20 }} />
+                <Text style={styles.cardTitle}>Solicitação Enviada!</Text>
+                <Text style={styles.cardMessage}>
+                    Sua coleta foi agendada com sucesso.{'\n'}
+                    A equipe entrará em contato em breve.
+                </Text>
+                <TouchableOpacity 
+                    style={[styles.cardButton, { backgroundColor: '#8A2BE2' }]} 
+                    onPress={closeSuccessModal}
+                >
+                    <Text style={styles.cardButtonText}>Ótimo, entendi</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+      </Modal>
+
+      {/* NOVO: Modal de Alerta/Erro Bonito */}
+      <Modal
+        visible={alertModalVisible}
+        animationType="fade"
+        transparent={true}
+      >
+        <View style={styles.centerModalOverlay}>
+            <View style={styles.card}>
+                <Ionicons 
+                  name={alertType === "error" ? "alert-circle" : "warning"} 
+                  size={80} 
+                  color={alertType === "error" ? "#D92D20" : "#FF9800"} 
+                  style={{ marginBottom: 20 }} 
+                />
+                <Text style={styles.cardTitle}>{alertTitle}</Text>
+                <Text style={styles.cardMessage}>{alertMessage}</Text>
+                <TouchableOpacity 
+                    style={[styles.cardButton, { backgroundColor: alertType === "error" ? "#D92D20" : "#FF9800" }]} 
+                    onPress={() => setAlertModalVisible(false)}
+                >
+                    <Text style={styles.cardButtonText}>OK</Text>
+                </TouchableOpacity>
+            </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 };
 
-// Componente de Checkbox Simples
 const Checkbox = ({ label, checked, onPress }) => (
   <TouchableOpacity style={styles.checkboxContainer} onPress={onPress}>
     <View style={[styles.checkboxBase, checked && styles.checkboxChecked]}>
@@ -272,7 +416,7 @@ const Checkbox = ({ label, checked, onPress }) => (
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F9F9F9" },
   header: {
-    backgroundColor: "#8A2BE2", // Roxo (BlueViolet)
+    backgroundColor: "#8A2BE2",
     paddingTop: 20,
     paddingBottom: 20,
     paddingHorizontal: 20,
@@ -289,7 +433,6 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     marginTop: 12,
   },
-
   input: {
     backgroundColor: "#EEE",
     borderRadius: 10,
@@ -310,8 +453,6 @@ const styles = StyleSheet.create({
   },
   inputAddress: { flex: 1, paddingVertical: 15, fontSize: 16, color: "#333" },
   textArea: { height: 80, textAlignVertical: "top" },
-
-  // Estilos do Checkbox
   checkboxGroup: { marginVertical: 5 },
   checkboxContainer: {
     flexDirection: "row",
@@ -331,7 +472,6 @@ const styles = StyleSheet.create({
   },
   checkboxChecked: { backgroundColor: "#8A2BE2" },
   checkboxLabel: { fontSize: 16, color: "#333" },
-
   dropdown: {
     backgroundColor: "#EEE",
     borderRadius: 10,
@@ -344,7 +484,6 @@ const styles = StyleSheet.create({
   },
   inputText: { fontSize: 16, color: "#333" },
   placeholderText: { fontSize: 16, color: "#999" },
-
   submitButton: {
     backgroundColor: "#8A2BE2",
     borderRadius: 12,
@@ -358,8 +497,8 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   submitButtonText: { color: "white", fontSize: 18, fontWeight: "bold" },
-
-  // Modal
+  
+  // Modais Inferiores (Período)
   modalContainer: {
     flex: 1,
     justifyContent: "flex-end",
@@ -391,6 +530,46 @@ const styles = StyleSheet.create({
     borderRadius: 10,
   },
   modalCloseText: { fontSize: 16, fontWeight: "bold", color: "#333" },
+
+  // --- Estilos para Modais de Sucesso e Alerta (Cards Centrais) ---
+  centerModalOverlay: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: 'rgba(0,0,0,0.6)',
+  },
+  card: {
+      width: '85%',
+      backgroundColor: 'white',
+      borderRadius: 20,
+      padding: 30,
+      alignItems: 'center',
+      elevation: 10,
+  },
+  cardTitle: {
+      fontSize: 22,
+      fontWeight: 'bold',
+      color: '#333',
+      marginBottom: 10,
+      textAlign: 'center',
+  },
+  cardMessage: {
+      fontSize: 16,
+      color: '#666',
+      textAlign: 'center',
+      marginBottom: 25,
+  },
+  cardButton: {
+      borderRadius: 30,
+      paddingVertical: 12,
+      paddingHorizontal: 40,
+      elevation: 2,
+  },
+  cardButtonText: {
+      color: 'white',
+      fontSize: 16,
+      fontWeight: 'bold',
+  }
 });
 
 export default RequestCataTrecoScreen;

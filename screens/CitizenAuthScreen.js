@@ -6,16 +6,56 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Alert,
+  Modal, // Importado
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
-import { Ionicons } from "@expo/vector-icons";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../utils/supabaseClient";
 
 // Cor Principal (Azul)
 const primaryBlue = "#007BFF";
+
+// --- FUNÇÃO DE VALIDAÇÃO DE CPF (Algoritmo Oficial) ---
+const validateCPF = (cpf) => {
+  // Remove caracteres não numéricos
+  cpf = cpf.replace(/[^\d]+/g, "");
+
+  if (cpf == "") return false;
+
+  // Elimina CPFs invalidos conhecidos
+  if (
+    cpf.length != 11 ||
+    cpf == "00000000000" ||
+    cpf == "11111111111" ||
+    cpf == "22222222222" ||
+    cpf == "33333333333" ||
+    cpf == "44444444444" ||
+    cpf == "55555555555" ||
+    cpf == "66666666666" ||
+    cpf == "77777777777" ||
+    cpf == "88888888888" ||
+    cpf == "99999999999"
+  )
+    return false;
+
+  // Valida 1o digito
+  let add = 0;
+  for (let i = 0; i < 9; i++) add += parseInt(cpf.charAt(i)) * (10 - i);
+  let rev = 11 - (add % 11);
+  if (rev == 10 || rev == 11) rev = 0;
+  if (rev != parseInt(cpf.charAt(9))) return false;
+
+  // Valida 2o digito
+  add = 0;
+  for (let i = 0; i < 10; i++) add += parseInt(cpf.charAt(i)) * (11 - i);
+  rev = 11 - (add % 11);
+  if (rev == 10 || rev == 11) rev = 0;
+  if (rev != parseInt(cpf.charAt(10))) return false;
+
+  return true;
+};
 
 export default function CitizenAuthScreen({ navigation, route }) {
   const mode = route.params?.mode;
@@ -69,6 +109,19 @@ const LoginForm = ({ navigation }) => {
   const [password, setPassword] = useState("");
   const [loading, setLoading] = useState(false);
 
+  // Estados do Alerta Bonito
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState("error");
+
+  const showAlert = (title, message, type = "error") => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
   const handleLogin = async () => {
     if (loading) return;
     setLoading(true);
@@ -78,10 +131,11 @@ const LoginForm = ({ navigation }) => {
     });
 
     if (error) {
-      Alert.alert("Erro no Login", error.message);
+      showAlert("Erro no Login", "Email ou senha incorretos.");
       setLoading(false);
       return;
     }
+    // Sucesso é tratado pelo onAuthStateChange no App.js
   };
 
   return (
@@ -133,6 +187,15 @@ const LoginForm = ({ navigation }) => {
           <Text style={styles.createAccountLink}>Criar uma conta</Text>
         </Text>
       </TouchableOpacity>
+
+      {/* Modal de Alerta */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={() => setAlertVisible(false)}
+      />
     </View>
   );
 };
@@ -147,13 +210,26 @@ const RegisterForm = ({ navigation }) => {
   const [telefone, setTelefone] = useState("");
 
   // Endereço
-  const [cep, setCep] = useState(""); // Novo estado para CEP
+  const [cep, setCep] = useState("");
   const [rua, setRua] = useState("");
   const [numero, setNumero] = useState("");
   const [bairro, setBairro] = useState("");
   const [semNumero, setSemNumero] = useState(false);
 
   const [loading, setLoading] = useState(false);
+
+  // Estados do Alerta Bonito
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertType, setAlertType] = useState("error");
+
+  const showAlert = (title, message, type = "error") => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
 
   // --- MÁSCARAS ---
   const maskCPF = (text) => {
@@ -198,10 +274,30 @@ const RegisterForm = ({ navigation }) => {
   const handleRegister = async () => {
     if (loading) return;
 
-    if (!rua || !bairro || !cep || (!numero && !semNumero)) {
-      Alert.alert(
-        "Endereço Incompleto",
-        "Por favor, preencha todos os campos do endereço, incluindo o CEP."
+    // 1. Validação de campos vazios
+    if (
+      !rua ||
+      !bairro ||
+      !cep ||
+      (!numero && !semNumero) ||
+      !nome ||
+      !email ||
+      !password
+    ) {
+      showAlert(
+        "Campos Incompletos",
+        "Por favor, preencha todos os campos obrigatórios.",
+        "warning"
+      );
+      return;
+    }
+
+    // 2. Validação de CPF REAL (MANTIDA)
+    if (!validateCPF(cpf)) {
+      showAlert(
+        "CPF Inválido",
+        "O CPF informado não é válido. Verifique os números.",
+        "error"
       );
       return;
     }
@@ -209,8 +305,6 @@ const RegisterForm = ({ navigation }) => {
     setLoading(true);
     const cpfLimpo = cpf.replace(/\D/g, "");
     const telLimpo = telefone.replace(/\D/g, "");
-    // O CEP pode ser salvo limpo (sem traço) ou formatado.
-    // Como a tela de edição usa o formato com traço, vamos salvar formatado mesmo para manter padrão visual.
 
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
@@ -218,13 +312,16 @@ const RegisterForm = ({ navigation }) => {
     });
 
     if (authError) {
-      Alert.alert("Erro no Cadastro", authError.message);
+      showAlert("Erro no Cadastro", authError.message);
       setLoading(false);
       return;
     }
 
     if (!authData.user) {
-      Alert.alert("Erro", "Não foi possível criar usuário.");
+      showAlert(
+        "Erro",
+        "Não foi possível criar usuário (email pode já estar em uso)."
+      );
       setLoading(false);
       return;
     }
@@ -240,7 +337,7 @@ const RegisterForm = ({ navigation }) => {
     });
 
     if (dbError) {
-      Alert.alert("Erro ao salvar dados", dbError.message);
+      showAlert("Erro ao salvar dados", dbError.message);
       setLoading(false);
       return;
     }
@@ -248,32 +345,37 @@ const RegisterForm = ({ navigation }) => {
     // Salva endereço
     const numeroFinal = semNumero ? "S/N" : numero;
 
-    // IMPORTANTE: Agora salvamos a rua apenas no campo rua
-    // E concatenamos para display apenas se necessário em componentes antigos
-    // Mas aqui vamos salvar "limpo" para o EditProfile ler corretamente
     const { error: addrError } = await supabase.from("enderecos").insert({
       usuario_id: authData.user.id,
-      rua: rua, // Salva apenas o nome da rua
-      numero: numeroFinal, // Salva o número separado
-      bairro: bairro, // Salva o bairro separado
-      cep: cep, // Salva o CEP que o usuário digitou
+      rua: rua,
+      numero: numeroFinal,
+      bairro: bairro,
+      cep: cep,
       latitude: 0,
       longitude: 0,
       is_padrao: true,
     });
 
     if (addrError) {
-      Alert.alert("Erro ao salvar endereço", addrError.message);
+      showAlert("Erro ao salvar endereço", addrError.message);
       setLoading(false);
       return;
     }
 
     setLoading(false);
-    Alert.alert(
-      "Sucesso!",
-      "Conta criada. Verifique seu e-mail para confirmar.",
-      [{ text: "OK", onPress: () => navigation.navigate("Welcome") }]
-    );
+    
+    // Alerta de Sucesso
+    setAlertTitle("Sucesso!");
+    setAlertMessage("Conta criada. Verifique seu e-mail para confirmar.");
+    setAlertType("success");
+    setAlertVisible(true);
+  };
+
+  const handleAlertClose = () => {
+      setAlertVisible(false);
+      if (alertType === 'success') {
+          navigation.navigate("Welcome");
+      }
   };
 
   return (
@@ -397,8 +499,52 @@ const RegisterForm = ({ navigation }) => {
       </TouchableOpacity>
 
       <View style={{ height: 40 }} />
+
+      {/* Modal de Alerta */}
+      <CustomAlert
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={handleAlertClose}
+      />
     </View>
   );
+};
+
+// --- Componente Reutilizável de Alerta Bonito (Azul para Cidadão) ---
+const CustomAlert = ({ visible, title, message, type, onClose }) => {
+    let iconName = 'alert-circle';
+    let color = '#D92D20'; // Vermelho (Erro)
+
+    if (type === 'warning') {
+        iconName = 'alert';
+        color = '#FF9800'; // Laranja (Atenção)
+    } else if (type === 'success') {
+        iconName = 'check-circle';
+        color = '#2ECC71'; // Verde (Sucesso)
+    }
+
+    // Se for sucesso, podemos usar o azul do app no botão, senão usa a cor do tipo
+    const buttonColor = type === 'success' ? primaryBlue : color;
+
+    return (
+        <Modal transparent={true} visible={visible} animationType="fade">
+            <View style={styles.modalOverlay}>
+                <View style={styles.modalContent}>
+                    <MaterialCommunityIcons name={iconName} size={60} color={color} style={{marginBottom: 15}} />
+                    <Text style={styles.modalTitle}>{title}</Text>
+                    <Text style={styles.modalMessage}>{message}</Text>
+                    <TouchableOpacity 
+                        style={[styles.modalButton, { backgroundColor: buttonColor }]} 
+                        onPress={onClose}
+                    >
+                        <Text style={styles.modalButtonText}>OK</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </Modal>
+    );
 };
 
 const styles = StyleSheet.create({
@@ -524,4 +670,49 @@ const styles = StyleSheet.create({
     color: primaryBlue,
     fontWeight: "bold",
   },
+
+  // --- Estilos do Modal Bonito ---
+  modalOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+  },
+  modalContent: {
+      width: '85%',
+      backgroundColor: 'white',
+      borderRadius: 20,
+      padding: 30,
+      alignItems: 'center',
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+  },
+  modalTitle: {
+      fontSize: 22,
+      fontWeight: 'bold',
+      color: '#333',
+      marginBottom: 10,
+      textAlign: 'center',
+  },
+  modalMessage: {
+      fontSize: 16,
+      color: '#666',
+      textAlign: 'center',
+      marginBottom: 25,
+      lineHeight: 22,
+  },
+  modalButton: {
+      paddingVertical: 12,
+      paddingHorizontal: 40,
+      borderRadius: 25,
+      elevation: 2,
+  },
+  modalButtonText: {
+      color: 'white',
+      fontWeight: 'bold',
+      fontSize: 16,
+  }
 });

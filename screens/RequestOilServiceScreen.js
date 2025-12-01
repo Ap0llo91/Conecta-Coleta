@@ -9,7 +9,6 @@ import {
   ActivityIndicator,
   Modal,
   FlatList,
-  Alert,
   KeyboardAvoidingView, 
   Platform 
 } from 'react-native';
@@ -51,23 +50,42 @@ export default function RequestOilServiceScreen({ navigation }) {
   const [loadingData, setLoadingData] = useState(true);
   const [submitting, setSubmitting] = useState(false);
 
-  // --- MÁSCARA DE TELEFONE CORRIGIDA (SEM TRAÇO FANTASMA) ---
+  // Estados do Alerta Bonito
+  const [alertVisible, setAlertVisible] = useState(false);
+  const [alertTitle, setAlertTitle] = useState('');
+  const [alertMessage, setAlertMessage] = useState('');
+  const [alertType, setAlertType] = useState('warning'); // warning, error, success
+
+  // --- Função Auxiliar de Alerta ---
+  const showAlert = (title, message, type = 'warning') => {
+    setAlertTitle(title);
+    setAlertMessage(message);
+    setAlertType(type);
+    setAlertVisible(true);
+  };
+
+  // --- Formatação de Documento (CNPJ) ---
+  const formatDocument = (text) => {
+    if (!text) return "";
+    const cleaned = text.replace(/\D/g, "");
+    if (cleaned.length > 11) {
+        return cleaned.replace(/^(\d{2})(\d{3})(\d{3})(\d{4})(\d{2})/, "$1.$2.$3/$4-$5");
+    }
+    return text;
+  };
+
+  // --- MÁSCARA DE TELEFONE ---
   const handlePhoneChange = (text) => {
-    let v = text.replace(/\D/g, ""); // Limpa tudo que não é número
-    v = v.substring(0, 11); // Limite de 11 dígitos
+    let v = text.replace(/\D/g, "");
+    v = v.substring(0, 11);
 
     if (v.length > 10) {
-      // Celular com 9 dígitos: (XX) 9 XXXX-XXXX
       v = v.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, "($1) $2 $3-$4");
     } else if (v.length > 6) {
-      // Fixo ou Celular incompleto: (XX) XXXX-XXXX
-      // CORREÇÃO: Só adiciona o traço se tiver mais de 6 dígitos (o 7º dígito empurra o traço)
       v = v.replace(/^(\d{2})(\d{4})(\d{0,4})$/, "($1) $2-$3");
     } else if (v.length > 2) {
-      // Apenas DDD + Prefixo: (XX) XXXX
       v = v.replace(/^(\d{2})(\d{0,5})$/, "($1) $2");
     } else {
-      // Apenas DDD: (XX
       if (v.length > 0) {
           v = v.replace(/^(\d*)/, "($1");
       }
@@ -101,26 +119,24 @@ export default function RequestOilServiceScreen({ navigation }) {
         .eq('usuario_id', user.id)
         .single();
 
+      // CORREÇÃO: Busca o endereço mais recente (sem depender de is_padrao)
       const { data: address } = await supabase
         .from('enderecos')
         .select('rua, numero, bairro')
         .eq('usuario_id', user.id)
-        .eq('is_padrao', true)
+        .order('created_at', { ascending: false }) // Pega o último criado
+        .limit(1)
         .maybeSingle();
 
       if (profile) {
         setNomeEstabelecimento(profile.nome_razao_social || '');
-        setCnpj(profile.cpf_cnpj || '');
+        // APLICA MÁSCARA NO CNPJ AO CARREGAR
+        setCnpj(formatDocument(profile.cpf_cnpj || ''));
+        
         if (profile.telefone) {
             let tel = profile.telefone.replace(/\D/g, "");
-            // Aplica formatação inicial
-            if (tel.length > 10) {
-                tel = tel.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, "($1) $2 $3-$4");
-            } else if (tel.length > 5) {
-                tel = tel.replace(/^(\d{2})(\d{4})(\d{4})$/, "($1) $2-$3");
-            } else if (tel.length > 2) {
-                tel = tel.replace(/^(\d{2})(\d+)$/, "($1) $2");
-            }
+            if (tel.length > 10) tel = tel.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, "($1) $2 $3-$4");
+            else if (tel.length > 5) tel = tel.replace(/^(\d{2})(\d{4})(\d{4})$/, "($1) $2-$3");
             setTelefone(tel);
         }
       }
@@ -141,7 +157,7 @@ export default function RequestOilServiceScreen({ navigation }) {
 
   const handleSubmit = async () => {
     if (!volume || !dataDesejada || !telefone) {
-      Alert.alert('Campos obrigatórios', 'Preencha volume, data e telefone.');
+      showAlert('Campos obrigatórios', 'Preencha volume, data e telefone.', 'warning');
       return;
     }
 
@@ -151,24 +167,29 @@ export default function RequestOilServiceScreen({ navigation }) {
       
       const { error } = await supabase.from('chamados').insert({
         usuario_id: user.id,
-        tipo_chamado_id: 5, 
+        tipo_problema: 'Coleta de Óleo', // Ajustado para string conforme padrão
         descricao: `Coleta de Óleo/Gordura. Tipo: ${selectedOil}. Armazenamento: ${selectedStorage}. Vol: ${volume}L. Data: ${dataDesejada}. Tel: ${telefone}`,
-        status: 'Em Análise',
+        status: 'Pendente',
         endereco_local: endereco, 
-        foto_url: null
       });
 
       if (error) throw error;
 
-      Alert.alert('Agendamento Realizado!', 'Sua solicitação de coleta de óleo foi enviada com sucesso.', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      showAlert('Agendamento Realizado!', 'Sua solicitação de coleta de óleo foi enviada com sucesso.', 'success');
 
     } catch (error) {
-      Alert.alert('Erro', 'Falha ao agendar: ' + error.message);
+      console.log('Erro envio:', error);
+      showAlert('Erro', 'Falha ao agendar: ' + error.message, 'error');
     } finally {
       setSubmitting(false);
     }
+  };
+
+  const handleAlertClose = () => {
+      setAlertVisible(false);
+      if (alertType === 'success') {
+          navigation.goBack();
+      }
   };
 
   const CustomPicker = ({ visible, onClose, options, onSelect, title }) => (
@@ -197,6 +218,38 @@ export default function RequestOilServiceScreen({ navigation }) {
       </TouchableOpacity>
     </Modal>
   );
+
+  // --- Componente de Alerta Bonito ---
+  const CustomAlert = ({ visible, title, message, type, onClose }) => {
+    let iconName = 'alert-circle';
+    let color = '#D32F2F'; // Vermelho
+
+    if (type === 'warning') {
+        iconName = 'alert';
+        color = '#FFA000'; // Laranja/Amarelo
+    } else if (type === 'success') {
+        iconName = 'check-circle';
+        color = '#388E3C'; // Verde
+    }
+
+    return (
+        <Modal transparent={true} visible={visible} animationType="fade">
+            <View style={styles.alertOverlay}>
+                <View style={styles.alertContent}>
+                    <MaterialCommunityIcons name={iconName} size={60} color={color} style={{marginBottom: 15}} />
+                    <Text style={styles.alertTitle}>{title}</Text>
+                    <Text style={styles.alertMessage}>{message}</Text>
+                    <TouchableOpacity 
+                        style={[styles.alertButton, { backgroundColor: color }]} 
+                        onPress={onClose}
+                    >
+                        <Text style={styles.alertButtonText}>OK</Text>
+                    </TouchableOpacity>
+                </View>
+            </View>
+        </Modal>
+    );
+  };
 
   if (loadingData) {
     return (
@@ -326,6 +379,14 @@ export default function RequestOilServiceScreen({ navigation }) {
         onSelect={setSelectedStorage}
         title="Armazenamento"
       />
+
+      <CustomAlert 
+        visible={alertVisible}
+        title={alertTitle}
+        message={alertMessage}
+        type={alertType}
+        onClose={handleAlertClose}
+      />
     </View>
   );
 }
@@ -409,10 +470,56 @@ const styles = StyleSheet.create({
   },
   submitButtonText: { color: 'white', fontSize: 16, fontWeight: 'bold' },
 
+  // Estilos do Modal de Picker
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'flex-end' },
   modalContent: { backgroundColor: 'white', borderTopLeftRadius: 20, borderTopRightRadius: 20, maxHeight: '50%' },
   modalHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 20, borderBottomWidth: 1, borderBottomColor: '#EEE' },
   modalTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
   modalItem: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
   modalItemText: { fontSize: 16, color: '#333' },
+
+  // Estilos do Alerta Bonito
+  alertOverlay: {
+      flex: 1,
+      backgroundColor: 'rgba(0,0,0,0.5)',
+      justifyContent: 'center',
+      alignItems: 'center',
+  },
+  alertContent: {
+      width: '85%',
+      backgroundColor: 'white',
+      borderRadius: 20,
+      padding: 30,
+      alignItems: 'center',
+      elevation: 5,
+      shadowColor: '#000',
+      shadowOffset: { width: 0, height: 2 },
+      shadowOpacity: 0.25,
+      shadowRadius: 4,
+  },
+  alertTitle: {
+      fontSize: 22,
+      fontWeight: 'bold',
+      color: '#333',
+      marginBottom: 10,
+      textAlign: 'center',
+  },
+  alertMessage: {
+      fontSize: 16,
+      color: '#666',
+      textAlign: 'center',
+      marginBottom: 25,
+      lineHeight: 22,
+  },
+  alertButton: {
+      paddingVertical: 12,
+      paddingHorizontal: 40,
+      borderRadius: 25,
+      elevation: 2,
+  },
+  alertButtonText: {
+      color: 'white',
+      fontWeight: 'bold',
+      fontSize: 16,
+  }
 });
