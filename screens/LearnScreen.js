@@ -50,7 +50,6 @@ export default function LearnScreen({ navigation }) {
   };
 
   const onFAQ = () => {
-    // MUDANÇA AQUI: Navega para a nova tela de FAQ
     navigation.navigate('FAQ');
   };
 

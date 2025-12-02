@@ -97,7 +97,7 @@ const LoginForm = ({ navigation }) => {
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
-  const [alertType, setAlertType] = useState('error'); 
+  const [alertType, setAlertType] = useState('error');
 
   const showAlert = (title, message, type = 'error') => {
     setAlertTitle(title);
@@ -126,7 +126,6 @@ const LoginForm = ({ navigation }) => {
       setLoading(false);
       return;
     }
-    // Sucesso é tratado pelo onAuthStateChange no App.js
   };
 
   return (
@@ -184,7 +183,10 @@ const RegisterForm = ({ navigation }) => {
   const [cnpj, setCnpj] = useState('');
   const [email, setEmail] = useState('');
   const [telefone, setTelefone] = useState('');
+  
+  // Senhas
   const [password, setPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
   
   // Endereço
   const [cep, setCep] = useState(''); 
@@ -195,7 +197,7 @@ const RegisterForm = ({ navigation }) => {
   
   const [loading, setLoading] = useState(false);
 
-  // Estados do Alerta Bonito
+  // Estados do Alerta
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
@@ -224,8 +226,20 @@ const RegisterForm = ({ navigation }) => {
     if (loading) return;
     
     // 1. Validação simples
-    if (!email || !password || !razaoSocial || !cnpj || !rua || !bairro || !cep || (!numero && !semNumero)) {
-        showAlert('Atenção', 'Por favor, preencha todos os campos obrigatórios, incluindo o CEP.', 'warning');
+    if (!email || !password || !confirmPassword || !razaoSocial || !cnpj || !rua || !bairro || !cep || (!numero && !semNumero)) {
+        showAlert('Atenção', 'Por favor, preencha todos os campos obrigatórios, incluindo a confirmação de senha.', 'warning');
+        return;
+    }
+
+    // --- VALIDAÇÃO DE SENHA ---
+    if (password.length < 6) {
+        showAlert('Senha Curta', 'A senha deve ter no mínimo 6 caracteres.', 'warning');
+        return;
+    }
+
+    // --- COMPARAÇÃO DE SENHAS ---
+    if (password !== confirmPassword) {
+        showAlert('Senhas não conferem', 'A senha e a confirmação de senha estão diferentes.', 'warning');
         return;
     }
 
@@ -234,6 +248,12 @@ const RegisterForm = ({ navigation }) => {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email: email,
       password: password,
+      options: {
+        data: {
+            tipo_usuario: 'CNPJ',
+            nome: razaoSocial
+        }
+      }
     });
 
     if (authError) {
@@ -252,6 +272,7 @@ const RegisterForm = ({ navigation }) => {
     const cnpjLimpo = cnpj.replace(/\D/g, "");
     const telLimpo = telefone.replace(/\D/g, "");
 
+    // Inserção no Banco
     const { error: dbError } = await supabase
       .from('usuarios')
       .insert({ 
@@ -291,6 +312,8 @@ const RegisterForm = ({ navigation }) => {
 
     setLoading(false);
     
+    await supabase.auth.refreshSession();
+
     // Alerta de Sucesso
     setAlertTitle('Sucesso!');
     setAlertMessage('Conta criada com sucesso! Você será redirecionado em instantes.');
@@ -300,10 +323,7 @@ const RegisterForm = ({ navigation }) => {
 
   const handleAlertClose = () => {
       setAlertVisible(false);
-      // MUDANÇA PRINCIPAL AQUI:
-      // Removemos o 'navigation.navigate("Welcome")'.
-      // Agora, se o login for automático (padrão do Supabase em dev), o App.js vai perceber e trocar para a tela da Empresa.
-      // Se não trocar, o usuário fecha o alerta e continua na tela (ou volta manualmente para logar).
+
   };
 
   return (
@@ -404,13 +424,24 @@ const RegisterForm = ({ navigation }) => {
       />
       
       <Text style={[styles.sectionHeader, { marginTop: 10 }]}>Acesso</Text>
-      <Text style={styles.label}>Senha</Text>
+      
+      <Text style={styles.label}>Senha (Min. 6 caracteres)</Text>
       <TextInput 
         style={styles.input} 
         placeholder="••••••••" 
         secureTextEntry 
         value={password} 
         onChangeText={setPassword} 
+      />
+
+      {/* --- CONFIRMAR SENHA --- */}
+      <Text style={styles.label}>Confirmar Senha</Text>
+      <TextInput 
+        style={styles.input} 
+        placeholder="••••••••" 
+        secureTextEntry 
+        value={confirmPassword} 
+        onChangeText={setConfirmPassword} 
       />
 
       <TouchableOpacity 
@@ -433,7 +464,7 @@ const RegisterForm = ({ navigation }) => {
   );
 };
 
-// --- Componente Reutilizável de Alerta Bonito ---
+// --- Componente Reutilizável de Alerta ---
 const CustomAlert = ({ visible, title, message, type, onClose }) => {
     let iconName = 'alert-circle';
     let color = '#D92D20'; // Vermelho (Erro)
@@ -578,7 +609,7 @@ const styles = StyleSheet.create({
     fontSize: 14,
   },
   
-  // --- Estilos do Modal Bonito ---
+  // --- Estilos do Modal ---
   modalOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.5)',

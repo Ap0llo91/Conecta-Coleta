@@ -80,8 +80,8 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logo: {
-    width: 300, // Aumentado drasticamente para compensar as bordas brancas
-    height: 300, // Aumentado drasticamente
+    width: 300,
+    height: 300,
     marginBottom: 10,
   },
   title: {

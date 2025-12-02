@@ -2,6 +2,7 @@
   "expo": {
     "name": "ConectaColeta",
     "slug": "ConectaColeta",
+    "scheme": "conectacoleta",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/icon.png",
@@ -17,13 +18,29 @@
     },
     "android": {
       "adaptiveIcon": {
-        "foregroundImage": "./assets/adaptive-icon.png",
+        "foregroundImage": "./assets/icon.png",
         "backgroundColor": "#ffffff"
       },
-      "edgeToEdgeEnabled": true
+      "edgeToEdgeEnabled": true,
+      "package": "com.ap0llo91.ConectaColeta",
+      "config": {
+        "googleMaps": {
+          "apiKey": "AIzaSyAc8DfeXtYKFSso90QUuHWofF48hYScNzc"
+        }
+      },
+      "permissions": [
+        "ACCESS_COARSE_LOCATION",
+        "ACCESS_FINE_LOCATION",
+        "FOREGROUND_SERVICE"
+      ]
     },
     "web": {
-      "favicon": "./assets/favicon.png"
+      "favicon": "./assets/icon.png"
+    },
+    "extra": {
+      "eas": {
+        "projectId": "842b8258-22d6-4f14-b149-db6e32b647ad"
+      }
     }
   }
 }

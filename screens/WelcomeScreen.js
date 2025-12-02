@@ -65,7 +65,7 @@ const styles = StyleSheet.create({
     marginBottom: 40,
   },
   logo: {
-    width: 300,  // Mantido em 300 como solicitado
+    width: 300,
     height: 300,
     marginBottom: 10,
   },
@@ -100,7 +100,7 @@ const styles = StyleSheet.create({
   },
   companyButton: {
     flexDirection: 'row',
-    backgroundColor: '#FFD700', // Amarelo consistente com a marca
+    backgroundColor: '#FFD700',
     borderRadius: 10,
     padding: 20,
     alignItems: 'center',

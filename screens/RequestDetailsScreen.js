@@ -63,8 +63,6 @@ const RequestDetailsScreen = ({ navigation, route }) => {
 
     try {
         const idToUpdate = report.chamado_id || report.id;
-        // Tenta adivinhar a coluna PK. Se sua tabela usa 'chamado_id', perfeito.
-        // Se der erro, verifique se a PK é 'id'.
         const pkColumn = report.chamado_id ? 'chamado_id' : 'id';
 
         const { error } = await supabase
@@ -207,7 +205,7 @@ const RequestDetailsScreen = ({ navigation, route }) => {
         </View>
       </Modal>
 
-      {/* --- MODAL DE SUCESSO (CORRIGIDO) --- */}
+      {/* --- MODAL DE SUCESSO --- */}
       <Modal
         animationType="fade"
         transparent={true}

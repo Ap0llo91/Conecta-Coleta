@@ -42,7 +42,7 @@ export default function ReportProblemScreen({ navigation }) {
   const [loadingAddress, setLoadingAddress] = useState(false);
   
   const [photoModalVisible, setPhotoModalVisible] = useState(false);
-  const [successModalVisible, setSuccessModalVisible] = useState(false); // Novo estado para o sucesso
+  const [successModalVisible, setSuccessModalVisible] = useState(false);
 
   useEffect(() => {
     (async () => {

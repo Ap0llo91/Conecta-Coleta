@@ -16,7 +16,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../utils/supabaseClient';
 
-const primaryGreen = '#2E7D32'; // Verde Escuro Profissional
+const primaryGreen = '#2E7D32';
 
 const MATERIALS = [
   { id: 'papel', label: 'Papel/Papelão' },
@@ -33,7 +33,7 @@ const FREQUENCY_TYPES = [
 ];
 
 export default function RequestLargeVolumeScreen({ navigation }) {
-  // Estados de Dados da Empresa (Travados)
+  // Estados de Dados da Empresa
   const [razaoSocial, setRazaoSocial] = useState('');
   const [cnpj, setCnpj] = useState('');
   const [endereco, setEndereco] = useState('');
@@ -148,7 +148,6 @@ export default function RequestLargeVolumeScreen({ navigation }) {
   };
 
   const handleSubmit = async () => {
-    // Validação
     const hasMaterial = Object.values(selectedMaterials).some(val => val === true);
     if (!hasMaterial) {
         showAlert('Material Necessário', 'Selecione pelo menos um tipo de material.', 'warning');
@@ -242,7 +241,7 @@ export default function RequestLargeVolumeScreen({ navigation }) {
         color = '#FFA000'; 
     } else if (type === 'success') {
         iconName = 'check-circle';
-        color = '#2E7D32'; // Verde Sucesso
+        color = '#2E7D32';
     }
 
     return (
@@ -490,7 +489,7 @@ const styles = StyleSheet.create({
   checkboxLabel: { fontSize: 15, color: '#333' },
 
   infoBox: {
-    backgroundColor: '#E8F5E9', // Verde bem claro
+    backgroundColor: '#E8F5E9',
     borderWidth: 1,
     borderColor: '#C8E6C9',
     borderRadius: 10,
@@ -503,7 +502,7 @@ const styles = StyleSheet.create({
   infoText: { color: '#2E7D32', fontSize: 13, lineHeight: 18 },
 
   submitButton: {
-    backgroundColor: '#00A859', // Verde vibrante do botão da imagem
+    backgroundColor: '#00A859',
     borderRadius: 10,
     paddingVertical: 16,
     alignItems: 'center',
@@ -520,7 +519,7 @@ const styles = StyleSheet.create({
   modalItem: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
   modalItemText: { fontSize: 16, color: '#333' },
 
-  // Estilos do Alerta Bonito
+  // Estilos do Alerta
   alertOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.5)',

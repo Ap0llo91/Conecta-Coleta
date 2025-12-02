@@ -34,12 +34,12 @@ const RequestCataTrecoScreen = ({ navigation }) => {
   // Estados dos Modais
   const [modalPeriodoVisible, setModalPeriodoVisible] = useState(false);
   const [successModalVisible, setSuccessModalVisible] = useState(false);
-  const [alertModalVisible, setAlertModalVisible] = useState(false); // NOVO: Modal de Alerta/Erro
+  const [alertModalVisible, setAlertModalVisible] = useState(false);
 
   // Estados para Conteúdo do Alerta
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
-  const [alertType, setAlertType] = useState("warning"); // 'warning' ou 'error'
+  const [alertType, setAlertType] = useState("warning");
 
   const [periodo, setPeriodo] = useState("");
   const periodos = [
@@ -58,7 +58,7 @@ const RequestCataTrecoScreen = ({ navigation }) => {
     outros: false,
   });
 
-  // Função auxiliar para mostrar o alerta bonito
+  // Função auxiliar para mostrar o alerta
   const showCustomAlert = (title, message, type = "warning") => {
     setAlertTitle(title);
     setAlertMessage(message);
@@ -115,7 +115,7 @@ const RequestCataTrecoScreen = ({ navigation }) => {
   };
 
   const handleAgendar = async () => {
-    // 1. Validação (Substituindo Alert nativo)
+    // 1. Validação
     if (!endereco || !telefone || !quantidade) {
         showCustomAlert("Campos Obrigatórios", "Por favor, preencha o endereço, telefone e a quantidade.", "warning");
         return;

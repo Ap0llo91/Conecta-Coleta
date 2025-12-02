@@ -48,7 +48,7 @@ export default function RequestScreen({ navigation }) {
   };
 
   const onFindDisposalSite = () => {
-    // NAVEGAÇÃO ATUALIZADA: Abre a nova tela de Encontrar Local
+    // Abre a nova tela de Encontrar Local
     navigation.navigate("FindDisposalSite");
   };
 

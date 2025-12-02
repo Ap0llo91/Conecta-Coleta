@@ -7,8 +7,7 @@ import {
   TouchableOpacity,
   ActivityIndicator,
   Image,
-  Alert,
-  Share,
+  Modal, // Importado
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -18,21 +17,22 @@ import { useFocusEffect } from "@react-navigation/native";
 // --- CORES DO TEMA ---
 const THEME = {
   citizen: {
-    primary: "#007BFF", // Azul
-    light: "#E3F2FD",   // Azul Claro
+    primary: "#007BFF",
+    light: "#E3F2FD", // Azul Claro
     icon: "person",
   },
   company: {
-    primary: "#F0B90B", // Amarelo/Laranja (Igual ao CompanyAuth)
-    light: "#FFFDE7",   // Amarelo Claro
+    primary: "#F0B90B",
+    light: "#FFFDE7",
     icon: "office-building",
-  }
+  },
 };
 
 // --- FORMATAÇÃO ---
 const formatDocument = (text) => {
   if (!text) return "Sem documento";
   const cleaned = text.replace(/\D/g, "");
+
   if (cleaned.length <= 11) {
     return cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, "$1.$2.$3-$4");
   } else {
@@ -46,13 +46,12 @@ const formatDocument = (text) => {
 const formatPhone = (text) => {
   if (!text) return "Telefone não informado";
   let cleaned = text.replace(/\D/g, "");
-  
-  if (cleaned.length > 11) cleaned = cleaned.substring(0, 11); // Limita tamanho
+
+  if (cleaned.length > 11) cleaned = cleaned.substring(0, 11);
 
   if (cleaned.length === 11) {
     return cleaned.replace(/^(\d{2})(\d{1})(\d{4})(\d{4})$/, "($1) $2 $3-$4");
-  } 
-  else if (cleaned.length === 10) {
+  } else if (cleaned.length === 10) {
     return cleaned.replace(/^(\d{2})(\d{4})(\d{4})$/, "($1) $2-$3");
   }
   return text;
@@ -62,9 +61,12 @@ export default function ProfileScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [profile, setProfile] = useState(null);
   const [address, setAddress] = useState(null);
-  
+
   // Estado para controlar se é Empresa ou Cidadão
   const [isCompany, setIsCompany] = useState(false);
+
+  // Estado para o Modal de Logout
+  const [logoutModalVisible, setLogoutModalVisible] = useState(false);
 
   // Define as cores com base no tipo de usuário
   const currentTheme = isCompany ? THEME.company : THEME.citizen;
@@ -77,7 +79,9 @@ export default function ProfileScreen({ navigation }) {
 
   const fetchUserData = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) {
         setLoading(false);
         return;
@@ -92,11 +96,10 @@ export default function ProfileScreen({ navigation }) {
 
       if (profileData) {
         setProfile(profileData);
-        // Verifica o tipo para ajustar o tema
-        if (profileData.tipo_usuario === 'CNPJ') {
-            setIsCompany(true);
+        if (profileData.tipo_usuario === "CNPJ") {
+          setIsCompany(true);
         } else {
-            setIsCompany(false);
+          setIsCompany(false);
         }
       }
 
@@ -105,12 +108,11 @@ export default function ProfileScreen({ navigation }) {
         .from("enderecos")
         .select("*")
         .eq("usuario_id", user.id)
-        .order("created_at", { ascending: false }) 
+        .order("created_at", { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (addressData) setAddress(addressData);
-
     } catch (error) {
       console.log("Erro geral:", error);
     } finally {
@@ -118,27 +120,15 @@ export default function ProfileScreen({ navigation }) {
     }
   };
 
-  const handleLogout = async () => {
-    Alert.alert("Sair", "Deseja realmente sair da sua conta?", [
-      { text: "Cancelar", style: "cancel" },
-      {
-        text: "Sair",
-        style: "destructive",
-        onPress: async () => {
-          await supabase.auth.signOut();
-        },
-      },
-    ]);
+  // Abre o modal bonito em vez do Alert nativo
+  const handleLogoutPress = () => {
+    setLogoutModalVisible(true);
   };
 
-  const handleShare = async () => {
-    try {
-      await Share.share({
-        message: "Conecta Coleta - Soluções sustentáveis para você e sua empresa!",
-      });
-    } catch (error) {
-      console.log(error.message);
-    }
+  // Ação de confirmação dentro do modal
+  const confirmLogout = async () => {
+    setLogoutModalVisible(false);
+    await supabase.auth.signOut();
   };
 
   if (loading) {
@@ -152,15 +142,15 @@ export default function ProfileScreen({ navigation }) {
   // --- Monta a string do endereço ---
   let fullAddress = "Endereço não cadastrado";
   if (address) {
-    const cepPart = address.cep && address.cep !== '00000-000' ? `CEP: ${address.cep}\n` : "";
-    
+    const cepPart =
+      address.cep && address.cep !== "00000-000" ? `CEP: ${address.cep}\n` : "";
+
     if (address.numero || address.bairro) {
       const r = address.rua || "";
       const n = address.numero ? `, ${address.numero}` : "";
       const b = address.bairro ? ` - ${address.bairro}` : "";
       fullAddress = `${cepPart}${r}${n}${b}`;
-    } 
-    else if (address.rua) {
+    } else if (address.rua) {
       fullAddress = `${cepPart}${address.rua}`;
     }
   }
@@ -172,10 +162,12 @@ export default function ProfileScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         {/* HEADER DINÂMICO */}
-        <View style={[styles.header, { backgroundColor: currentTheme.primary }]}>
+        <View
+          style={[styles.header, { backgroundColor: currentTheme.primary }]}
+        >
           <View style={styles.headerTopRow}>
             <View />
-            <TouchableOpacity onPress={handleLogout}>
+            <TouchableOpacity onPress={handleLogoutPress}>
               <Ionicons
                 name="log-out-outline"
                 size={24}
@@ -194,11 +186,18 @@ export default function ProfileScreen({ navigation }) {
                 />
               ) : (
                 <View style={styles.avatarPlaceholder}>
-                  {/* Ícone muda se for empresa */}
                   {isCompany ? (
-                      <MaterialCommunityIcons name="office-building" size={36} color={currentTheme.primary} />
+                    <MaterialCommunityIcons
+                      name="office-building"
+                      size={36}
+                      color={currentTheme.primary}
+                    />
                   ) : (
-                      <Ionicons name="person" size={40} color={currentTheme.primary} />
+                    <Ionicons
+                      name="person"
+                      size={40}
+                      color={currentTheme.primary}
+                    />
                   )}
                 </View>
               )}
@@ -219,21 +218,36 @@ export default function ProfileScreen({ navigation }) {
           <Text style={styles.infoTitle}>Informações de Contato</Text>
 
           <View style={styles.infoRow}>
-            <Ionicons name="mail-outline" size={20} color="#666" style={styles.infoIcon} />
+            <Ionicons
+              name="mail-outline"
+              size={20}
+              color="#666"
+              style={styles.infoIcon}
+            />
             <Text style={styles.infoText} numberOfLines={1}>
               {profile?.email}
             </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Ionicons name="call-outline" size={20} color="#666" style={styles.infoIcon} />
+            <Ionicons
+              name="call-outline"
+              size={20}
+              color="#666"
+              style={styles.infoIcon}
+            />
             <Text style={styles.infoText}>
               {formatPhone(profile?.telefone)}
             </Text>
           </View>
 
           <View style={styles.infoRow}>
-            <Ionicons name="location-outline" size={20} color="#666" style={styles.infoIcon} />
+            <Ionicons
+              name="location-outline"
+              size={20}
+              color="#666"
+              style={styles.infoIcon}
+            />
             <Text style={styles.infoText} numberOfLines={3}>
               {fullAddress}
             </Text>
@@ -243,8 +257,10 @@ export default function ProfileScreen({ navigation }) {
             style={[styles.editButton, { backgroundColor: currentTheme.light }]}
             onPress={() => navigation.navigate("EditProfile")}
           >
-            <Text style={[styles.editButtonText, { color: currentTheme.primary }]}>
-                Editar Informações
+            <Text
+              style={[styles.editButtonText, { color: currentTheme.primary }]}
+            >
+              Editar Informações
             </Text>
           </TouchableOpacity>
         </View>
@@ -289,22 +305,50 @@ export default function ProfileScreen({ navigation }) {
           onPress={() => navigation.navigate("FAQ")}
         />
 
-        <MenuOption
-          icon="share-social-outline"
-          title="Compartilhar App"
-          subtitle="Convide parceiros e amigos"
-          color={currentTheme.primary}
-          bgColor={currentTheme.light}
-          onPress={handleShare}
-        />
-
         <View style={{ height: 30 }} />
       </ScrollView>
+
+      {/* --- MODAL DE LOGOUT BONITO --- */}
+      <Modal
+        animationType="fade"
+        transparent={true}
+        visible={logoutModalVisible}
+        onRequestClose={() => setLogoutModalVisible(false)}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeaderIcon}>
+              <Ionicons name="log-out" size={32} color="#D32F2F" />
+            </View>
+            <Text style={styles.modalTitle}>Sair da Conta</Text>
+            <Text style={styles.modalMessage}>
+              Tem certeza que deseja sair? Você precisará fazer login novamente
+              para acessar seus dados.
+            </Text>
+
+            <View style={styles.modalButtonsRow}>
+              <TouchableOpacity
+                style={styles.modalButtonCancel}
+                onPress={() => setLogoutModalVisible(false)}
+              >
+                <Text style={styles.modalButtonCancelText}>Cancelar</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity
+                style={styles.modalButtonConfirm}
+                onPress={confirmLogout}
+              >
+                <Text style={styles.modalButtonConfirmText}>Sair</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
     </SafeAreaView>
   );
 }
 
-// Componente MenuOption ajustado para receber cor de fundo
+// Componente MenuOption
 const MenuOption = ({ icon, title, subtitle, color, bgColor, onPress }) => (
   <TouchableOpacity style={styles.menuOption} onPress={onPress}>
     <View style={[styles.iconCircle, { backgroundColor: bgColor }]}>
@@ -323,7 +367,6 @@ const styles = StyleSheet.create({
   loadingContainer: { flex: 1, justifyContent: "center", alignItems: "center" },
   scrollContent: { paddingBottom: 20 },
   header: {
-    // A cor de fundo agora é dinâmica via style inline
     paddingHorizontal: 20,
     paddingBottom: 40,
     paddingTop: 10,
@@ -408,14 +451,12 @@ const styles = StyleSheet.create({
     flex: 1,
   },
   editButton: {
-    // Cor de fundo dinâmica
     borderRadius: 8,
     paddingVertical: 12,
     alignItems: "center",
     marginTop: 10,
   },
   editButtonText: {
-    // Cor do texto dinâmica
     fontWeight: "bold",
     fontSize: 14,
   },
@@ -462,5 +503,80 @@ const styles = StyleSheet.create({
     fontSize: 12,
     color: "#888",
     marginTop: 2,
+  },
+
+  // --- Estilos do Modal ---
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
+    padding: 20,
+  },
+  modalContent: {
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 25,
+    alignItems: "center",
+    width: "85%",
+    elevation: 5,
+    shadowColor: "#000",
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+  },
+  modalHeaderIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    backgroundColor: "#FFEBEE",
+    justifyContent: "center",
+    alignItems: "center",
+    marginBottom: 15,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 10,
+    textAlign: "center",
+  },
+  modalMessage: {
+    fontSize: 15,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 25,
+    lineHeight: 22,
+  },
+  modalButtonsRow: {
+    flexDirection: "row",
+    justifyContent: "space-between",
+    width: "100%",
+  },
+  modalButtonCancel: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#F5F5F5",
+    marginRight: 10,
+    alignItems: "center",
+  },
+  modalButtonCancelText: {
+    color: "#666",
+    fontWeight: "bold",
+    fontSize: 15,
+  },
+  modalButtonConfirm: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    backgroundColor: "#D32F2F",
+    marginLeft: 10,
+    alignItems: "center",
+  },
+  modalButtonConfirmText: {
+    color: "white",
+    fontWeight: "bold",
+    fontSize: 15,
   },
 });

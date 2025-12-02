@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState, useRef, useEffect } from 'react';
 import { 
   View, 
   Text, 
@@ -7,59 +7,124 @@ import {
   useWindowDimensions, 
   TouchableOpacity, 
   Animated,
+  ActivityIndicator
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { MaterialCommunityIcons, Ionicons, FontAwesome5 } from '@expo/vector-icons';
+import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons';
+import { supabase } from '../utils/supabaseClient';
+import AsyncStorage from '@react-native-async-storage/async-storage';
 
-// --- DADOS DOS SLIDES ---
-const SLIDES = [
+// --- DADOS DO TUTORIAL CIDADÃO ---
+const CITIZEN_SLIDES = [
   {
     id: '1',
     title: 'Bem-vindo ao Conecta Coleta!',
-    description: 'A solução completa para gerenciar seus resíduos em Recife. \n\nVamos fazer um tour rápido pelo app?',
+    description: 'A solução completa para gerenciar seus resíduos em Recife. \n\nVamos fazer um tour rápido?',
     icon: 'recycle',
-    color: '#00A859', // Verde Principal
+    color: '#00A859',
     lib: MaterialCommunityIcons,
   },
   {
     id: '2',
     title: 'Nunca Mais Perca o Caminhão',
-    description: 'Na tela inicial, você vê um cronômetro em tempo real dizendo exatamente quando o caminhão vai passar na sua porta.',
+    description: 'Na tela inicial, veja em tempo real quando o caminhão de coleta vai passar na sua porta.',
     icon: 'clock-fast', 
-    color: '#007BFF', // Azul
+    color: '#007BFF',
     lib: MaterialCommunityIcons
   },
   {
     id: '3',
-    title: 'Mapa Inteligente',
-    description: 'Acompanhe o trajeto do caminhão ao vivo e encontre os Ecopontos e locais de reciclagem mais próximos de você.',
-    icon: 'map-search-outline',
-    color: '#F0B90B', // Amarelo
+    title: 'Solicite Serviços',
+    description: 'Precisa descartar um sofá velho ou entulho? Agende o Cata-Treco ou solicite Caçambas pelo app.',
+    icon: 'calendar-check',
+    color: '#8E44AD',
     lib: MaterialCommunityIcons
   },
   {
     id: '4',
-    title: 'Solicite Serviços na Palma da Mão',
-    description: 'Precisa descartar um sofá velho ou entulho?\nAgende o Cata-Treco, solicite Caçambas ou reporte problemas na sua rua.',
-    icon: 'calendar-check',
-    color: '#8E44AD', // Roxo
+    title: 'Aprenda e Recicle',
+    description: 'Encontre Ecopontos próximos e veja dicas de como separar seu lixo corretamente.',
+    icon: 'map-search-outline',
+    color: '#F0B90B',
+    lib: MaterialCommunityIcons
+  },
+];
+
+// --- DADOS DO TUTORIAL EMPRESA ---
+const COMPANY_SLIDES = [
+  {
+    id: '1',
+    title: 'Bem-vindo, Parceiro!',
+    description: 'Gerencie a logística reversa e os resíduos da sua empresa com eficiência e conformidade legal.',
+    icon: 'office-building',
+    color: '#F0B90B',
+    lib: MaterialCommunityIcons,
+  },
+  {
+    id: '2',
+    title: 'Resíduos Especiais',
+    description: 'Solicite coleta especializada para óleo de cozinha, resíduos de saúde e materiais perigosos.',
+    icon: 'biohazard', 
+    color: '#D32F2F',
     lib: MaterialCommunityIcons
   },
   {
-    id: '5',
-    title: 'Aprenda e Recicle',
-    description: 'Acesse dicas de descarte, tire dúvidas e veja como separar seu lixo corretamente na aba "Aprender".',
-    icon: 'school-outline',
-    color: '#2ECC71', // Verde Claro
-    lib: Ionicons
+    id: '3',
+    title: 'Grandes Volumes',
+    description: 'Produz muito resíduo? Agende coletas de grande porte e defina a frequência ideal para seu negócio.',
+    icon: 'truck-flatbed',
+    color: '#2E7D32',
+    lib: MaterialCommunityIcons
+  },
+  {
+    id: '4',
+    title: 'Certificados (CDF)',
+    description: 'Receba automaticamente seus Certificados de Destinação Final após cada coleta concluída.',
+    icon: 'file-certificate-outline',
+    color: '#1976D2',
+    lib: MaterialCommunityIcons
   },
 ];
 
 export default function TutorialScreen({ navigation, route }) {
   const { width } = useWindowDimensions();
   const [currentIndex, setCurrentIndex] = useState(0);
+  const [loading, setLoading] = useState(true);
+  const [slides, setSlides] = useState(CITIZEN_SLIDES);
+  
   const scrollX = useRef(new Animated.Value(0)).current;
   const slidesRef = useRef(null);
+
+  const isFromSettings = route.params?.fromSettings;
+
+  // --- DETECÇÃO DE TIPO DE USUÁRIO ---
+  useEffect(() => {
+    const detectUserType = async () => {
+      try {
+        const { data: { user } } = await supabase.auth.getUser();
+        
+        if (user) {
+          const { data } = await supabase
+            .from('usuarios')
+            .select('tipo_usuario')
+            .eq('usuario_id', user.id)
+            .single();
+          
+          if (data && data.tipo_usuario === 'CNPJ') {
+            setSlides(COMPANY_SLIDES);
+          } else {
+            setSlides(CITIZEN_SLIDES);
+          }
+        }
+      } catch (error) {
+        console.log("Erro ao detectar usuário para tutorial:", error);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    detectUserType();
+  }, []);
 
   const viewableItemsChanged = useRef(({ viewableItems }) => {
     if (viewableItems && viewableItems.length > 0) {
@@ -70,19 +135,23 @@ export default function TutorialScreen({ navigation, route }) {
   const viewConfig = useRef({ viewAreaCoveragePercentThreshold: 50 }).current;
 
   const handleNext = () => {
-    if (currentIndex < SLIDES.length - 1) {
+    if (currentIndex < slides.length - 1) {
       slidesRef.current.scrollToIndex({ index: currentIndex + 1 });
     } else {
       handleFinish();
     }
   };
 
-  const handleFinish = () => {
-    // Força a navegação para a Home (AppTabs), limpando o histórico para não voltar ao tutorial
-    navigation.reset({
+  const handleFinish = async () => {
+    if (isFromSettings) {
+      navigation.goBack();
+    } else {
+      await AsyncStorage.setItem('hasSeenTutorial', 'true');
+      navigation.reset({
         index: 0,
         routes: [{ name: 'AppTabs' }], 
-    });
+      });
+    }
   };
 
   const Paginator = ({ data, scrollX }) => {
@@ -110,7 +179,7 @@ export default function TutorialScreen({ navigation, route }) {
                   { 
                       width: dotWidth, 
                       opacity, 
-                      backgroundColor: SLIDES[i].color 
+                      backgroundColor: data[i].color 
                   }
               ]} 
               key={i.toString()} 
@@ -121,21 +190,31 @@ export default function TutorialScreen({ navigation, route }) {
     );
   };
 
-  const isLastSlide = currentIndex === SLIDES.length - 1;
+  if (loading) {
+    return (
+      <View style={{flex:1, justifyContent:'center', alignItems:'center'}}>
+        <ActivityIndicator size="large" color="#007BFF" />
+      </View>
+    );
+  }
+
+  const isLastSlide = currentIndex === slides.length - 1;
 
   return (
     <SafeAreaView style={styles.container}>
       
-      {/* Botão Pular no Topo */}
+      {/* Botão Pular (Só aparece se não for o último slide) */}
       {!isLastSlide && (
           <TouchableOpacity onPress={handleFinish} style={styles.topSkipButton}>
-              <Text style={styles.topSkipText}>Pular</Text>
+            <Text style={styles.topSkipText}>
+                {isFromSettings ? 'Fechar' : 'Pular'}
+            </Text>
           </TouchableOpacity>
       )}
 
       <View style={{ flex: 3 }}>
         <FlatList
-          data={SLIDES}
+          data={slides}
           renderItem={({ item }) => {
               const IconLib = item.lib;
               return (
@@ -167,20 +246,21 @@ export default function TutorialScreen({ navigation, route }) {
       </View>
 
       <View style={styles.bottomContainer}>
-        <Paginator data={SLIDES} scrollX={scrollX} />
+        <Paginator data={slides} scrollX={scrollX} />
 
-        {/* Botão Principal com Largura Dinâmica */}
+        {/* Botão Principal */}
         <TouchableOpacity 
             style={[
                 styles.nextButton, 
-                { backgroundColor: SLIDES[currentIndex].color },
-                // Se for o último slide, usa padding para caber o texto. Se não, largura fixa para ficar redondo.
+                { backgroundColor: slides[currentIndex].color },
                 isLastSlide ? { paddingHorizontal: 30, width: 'auto' } : { width: 70 }
             ]} 
             onPress={handleNext}
         >
             {isLastSlide ? (
-                <Text style={styles.nextButtonText}>Começar</Text>
+                <Text style={styles.nextButtonText}>
+                    {isFromSettings ? 'Fechar Tutorial' : 'Começar!'}
+                </Text>
             ) : (
                 <Ionicons name="arrow-forward" size={28} color="white" />
             )}
@@ -230,7 +310,7 @@ const styles = StyleSheet.create({
   },
   title: {
     fontWeight: '800',
-    fontSize: 26,
+    fontSize: 28,
     marginBottom: 15,
     textAlign: 'center',
   },
@@ -257,12 +337,9 @@ const styles = StyleSheet.create({
     borderRadius: 4,
     marginHorizontal: 6,
   },
-  
-  // Estilo Base do Botão
   nextButton: {
       borderRadius: 35,
       height: 70,
-      // width: removido daqui e controlado dinamicamente no componente
       justifyContent: 'center',
       alignItems: 'center',
       elevation: 5,
@@ -275,7 +352,7 @@ const styles = StyleSheet.create({
   nextButtonText: {
       color: 'white',
       fontWeight: 'bold',
-      fontSize: 18, // Aumentei um pouco a fonte
+      fontSize: 18,
       letterSpacing: 1,
   },
 });

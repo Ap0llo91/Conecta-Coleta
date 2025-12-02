@@ -21,7 +21,7 @@ const DisposalTipsScreen = ({ navigation }) => {
         <TipCard 
           title="Papel e Papelão"
           titleColor="#3F51B5"
-          backgroundColor="#E8EAF6" // Azul bem clarinho
+          backgroundColor="#E8EAF6"
           items={[
             { text: "Limpe e seque antes de descartar", type: "check" },
             { text: "Dobre caixas para ocupar menos espaço", type: "check" },
@@ -34,7 +34,7 @@ const DisposalTipsScreen = ({ navigation }) => {
         <TipCard 
           title="Plástico"
           titleColor="#2E7D32"
-          backgroundColor="#E8F5E9" // Verde bem clarinho
+          backgroundColor="#E8F5E9"
           items={[
             { text: "Lave embalagens antes", type: "check" },
             { text: "Amasse garrafas PET", type: "check" },
@@ -47,7 +47,7 @@ const DisposalTipsScreen = ({ navigation }) => {
         <TipCard 
           title="Vidro"
           titleColor="#E65100"
-          backgroundColor="#FFF3E0" // Laranja bem clarinho (quase bege)
+          backgroundColor="#FFF3E0"
           items={[
             { text: "Lave e seque", type: "check" },
             { text: "Embale pedaços quebrados em jornal", type: "check" },
@@ -60,7 +60,7 @@ const DisposalTipsScreen = ({ navigation }) => {
         <TipCard 
           title="Metal"
           titleColor="#455A64"
-          backgroundColor="#ECEFF1" // Cinza bem clarinho
+          backgroundColor="#ECEFF1"
           items={[
             { text: "Lave latas", type: "check" },
             { text: "Amasse para reduzir volume", type: "check" },
@@ -73,7 +73,7 @@ const DisposalTipsScreen = ({ navigation }) => {
         <TipCard 
           title="Orgânicos"
           titleColor="#795548"
-          backgroundColor="#EFEBE9" // Marrom bem clarinho
+          backgroundColor="#EFEBE9"
           items={[
             { text: "Separe restos de alimentos", type: "check" },
             { text: "Pode virar adubo em composteira", type: "check" },
@@ -142,8 +142,7 @@ const TipCard = ({ title, titleColor, backgroundColor, items }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F0F2F5' },
   header: {
-    backgroundColor: '#0066FF', // Azul vibrante do protótipo
-    paddingTop: 20,
+    backgroundColor: '#0066FF',
     paddingBottom: 25,
     paddingHorizontal: 20,
   },
@@ -194,9 +193,9 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
 
-  // Estilo Footer (Azul Escuro)
+  // Estilo Footer
   footerCard: {
-    backgroundColor: '#1565C0', // Azul escuro
+    backgroundColor: '#1565C0',
     borderRadius: 15,
     padding: 25,
     alignItems: 'center',

@@ -61,13 +61,12 @@ const ScheduleServiceScreen = ({ navigation }) => {
           onPress={() => navigation.navigate("RequestCataTreco")}
         />
 
-        {/* BOTÃO 3: LIXO NÃO COLETADO (CORRIGIDO) */}
+        {/* BOTÃO 3: LIXO NÃO COLETADO */}
         <ServiceOption
           title="Lixo Não Coletado"
           subtitle="Solicitar retirada urgente"
           icon="truck-outline"
           iconColor="#FF3B30"
-          // Agora navega corretamente para a tela vermelha
           onPress={() => navigation.navigate("RequestUncollected")}
         />
 

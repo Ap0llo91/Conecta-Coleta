@@ -15,6 +15,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../utils/supabaseClient';
+import DateTimePicker from '@react-native-community/datetimepicker';
 
 const primaryOrange = '#E65100';
 
@@ -38,7 +39,12 @@ export default function RequestOilServiceScreen({ navigation }) {
   const [endereco, setEndereco] = useState('');
   
   const [volume, setVolume] = useState('');
+  
+  // --- MUDANÇA: Lógica de Data ---
   const [dataDesejada, setDataDesejada] = useState('');
+  const [date, setDate] = useState(new Date()); 
+  const [showDatePicker, setShowDatePicker] = useState(false); 
+
   const [telefone, setTelefone] = useState('');
 
   const [selectedOil, setSelectedOil] = useState(OIL_TYPES[0]);
@@ -54,7 +60,7 @@ export default function RequestOilServiceScreen({ navigation }) {
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState('');
   const [alertMessage, setAlertMessage] = useState('');
-  const [alertType, setAlertType] = useState('warning'); // warning, error, success
+  const [alertType, setAlertType] = useState('warning');
 
   // --- Função Auxiliar de Alerta ---
   const showAlert = (title, message, type = 'warning') => {
@@ -62,6 +68,20 @@ export default function RequestOilServiceScreen({ navigation }) {
     setAlertMessage(message);
     setAlertType(type);
     setAlertVisible(true);
+  };
+
+  // --- NOVA FUNÇÃO DE DATA (CALENDÁRIO) ---
+  const onChangeDate = (event, selectedDate) => {
+    const currentDate = selectedDate || date;
+    setShowDatePicker(false);
+    setDate(currentDate);
+
+    if (selectedDate) {
+        const day = currentDate.getDate().toString().padStart(2, '0');
+        const month = (currentDate.getMonth() + 1).toString().padStart(2, '0');
+        const year = currentDate.getFullYear();
+        setDataDesejada(`${day}/${month}/${year}`);
+    }
   };
 
   // --- Formatação de Documento (CNPJ) ---
@@ -93,17 +113,6 @@ export default function RequestOilServiceScreen({ navigation }) {
     setTelefone(v);
   };
 
-  const handleDateChange = (text) => {
-    let v = text.replace(/\D/g, "");
-    if (v.length > 8) v = v.substring(0, 8); 
-    if (v.length >= 5) {
-        v = v.replace(/^(\d{2})(\d{2})(\d{1,4})$/, "$1/$2/$3");
-    } else if (v.length >= 3) {
-        v = v.replace(/^(\d{2})(\d{1,2})$/, "$1/$2");
-    }
-    setDataDesejada(v);
-  };
-
   useEffect(() => {
     fetchCompanyData();
   }, []);
@@ -119,18 +128,17 @@ export default function RequestOilServiceScreen({ navigation }) {
         .eq('usuario_id', user.id)
         .single();
 
-      // CORREÇÃO: Busca o endereço mais recente (sem depender de is_padrao)
+      // Busca o endereço mais recente
       const { data: address } = await supabase
         .from('enderecos')
         .select('rua, numero, bairro')
         .eq('usuario_id', user.id)
-        .order('created_at', { ascending: false }) // Pega o último criado
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 
       if (profile) {
         setNomeEstabelecimento(profile.nome_razao_social || '');
-        // APLICA MÁSCARA NO CNPJ AO CARREGAR
         setCnpj(formatDocument(profile.cpf_cnpj || ''));
         
         if (profile.telefone) {
@@ -167,7 +175,7 @@ export default function RequestOilServiceScreen({ navigation }) {
       
       const { error } = await supabase.from('chamados').insert({
         usuario_id: user.id,
-        tipo_problema: 'Coleta de Óleo', // Ajustado para string conforme padrão
+        tipo_problema: 'Coleta de Óleo',
         descricao: `Coleta de Óleo/Gordura. Tipo: ${selectedOil}. Armazenamento: ${selectedStorage}. Vol: ${volume}L. Data: ${dataDesejada}. Tel: ${telefone}`,
         status: 'Pendente',
         endereco_local: endereco, 
@@ -219,17 +227,17 @@ export default function RequestOilServiceScreen({ navigation }) {
     </Modal>
   );
 
-  // --- Componente de Alerta Bonito ---
+  // --- Componente de Alerta ---
   const CustomAlert = ({ visible, title, message, type, onClose }) => {
     let iconName = 'alert-circle';
-    let color = '#D32F2F'; // Vermelho
+    let color = '#D32F2F';
 
     if (type === 'warning') {
         iconName = 'alert';
-        color = '#FFA000'; // Laranja/Amarelo
+        color = '#FFA000';
     } else if (type === 'success') {
         iconName = 'check-circle';
-        color = '#388E3C'; // Verde
+        color = '#388E3C';
     }
 
     return (
@@ -317,15 +325,30 @@ export default function RequestOilServiceScreen({ navigation }) {
             <Ionicons name="chevron-down" size={20} color="#666" />
           </TouchableOpacity>
 
+          {/* --- CAMPO DE DATA INTELIGENTE --- */}
           <Text style={styles.label}>Data Desejada</Text>
-          <TextInput 
+          <TouchableOpacity 
             style={styles.input} 
-            placeholder="dd/mm/aaaa" 
-            keyboardType="numeric"
-            value={dataDesejada}
-            onChangeText={handleDateChange}
-            maxLength={10}
-          />
+            onPress={() => setShowDatePicker(true)}
+          >
+            <View style={{flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between'}}>
+                <Text style={dataDesejada ? { fontSize: 15, color: '#333' } : { fontSize: 15, color: '#999' }}>
+                    {dataDesejada || "dd/mm/aaaa"}
+                </Text>
+                <Ionicons name="calendar-outline" size={20} color="#666" />
+            </View>
+          </TouchableOpacity>
+
+          {showDatePicker && (
+            <DateTimePicker
+              testID="dateTimePicker"
+              value={date}
+              mode="date"
+              display="default"
+              minimumDate={new Date()}
+              onChange={onChangeDate}
+            />
+          )}
 
           <Text style={styles.label}>Telefone</Text>
           <TextInput 
@@ -478,7 +501,7 @@ const styles = StyleSheet.create({
   modalItem: { padding: 20, borderBottomWidth: 1, borderBottomColor: '#F5F5F5' },
   modalItemText: { fontSize: 16, color: '#333' },
 
-  // Estilos do Alerta Bonito
+  // Estilos do Alerta
   alertOverlay: {
       flex: 1,
       backgroundColor: 'rgba(0,0,0,0.5)',

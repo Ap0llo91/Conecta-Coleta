@@ -80,8 +80,8 @@ export default function ServicesEmpresaScreen({ navigation }) {
           title="Coleta de Resíduos de Saúde"
           subtitle="Para clínicas, hospitais e farmácias"
           icon="biohazard"
-          color="#D32F2F" // Vermelho forte
-          iconBg="#FFEBEE" // Vermelho claro
+          color="#D32F2F"
+          iconBg="#FFEBEE"
           onPress={() => navigation.navigate("RequestHealthService")}
         />
 
@@ -89,13 +89,13 @@ export default function ServicesEmpresaScreen({ navigation }) {
         <ServiceCard
           title="Coleta de Óleos e Gorduras"
           subtitle="Para restaurantes e cozinhas industriais"
-          icon="water-outline" // Gota
-          color="#F57C00" // Laranja
-          iconBg="#FFF3E0" // Laranja claro
+          icon="water-outline"
+          color="#F57C00"
+          iconBg="#FFF3E0"
           onPress={() => navigation.navigate("RequestOilService")}
         />
 
-        {/* REMOVIDO: Card de Grande Volume (Agora exclusivo da Home) */}
+        {/* Card de Grande Volume (Agora exclusivo da Home) */}
 
         {/* Painel de Informações */}
         <View style={styles.infoBox}>
@@ -134,7 +134,7 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: "#F5F5F5" },
 
   header: {
-    backgroundColor: "#E69138", // Amarelo mais escuro/dourado
+    backgroundColor: "#E69138",
     paddingHorizontal: 20,
     paddingBottom: 25,
     borderBottomLeftRadius: 0,
@@ -205,7 +205,7 @@ const styles = StyleSheet.create({
 
   // Info Box
   infoBox: {
-    backgroundColor: "#FFFDE7", // Creme bem clarinho
+    backgroundColor: "#FFFDE7",
     borderRadius: 12,
     padding: 20,
     marginTop: 10,
@@ -213,7 +213,7 @@ const styles = StyleSheet.create({
   infoTitle: {
     fontSize: 15,
     fontWeight: "bold",
-    color: "#5D4037", // Marrom
+    color: "#5D4037",
     marginBottom: 10,
   },
   bulletPoint: {

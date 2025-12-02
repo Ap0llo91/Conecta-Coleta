@@ -19,10 +19,10 @@ import * as Location from "expo-location";
 import { useFocusEffect } from "@react-navigation/native";
 
 // --- CONFIGURAÇÃO DA SIMULAÇÃO ---
-const CYCLE_MINUTES = 20; // O caminhão leva 20 min para chegar
-const MAX_DISTANCE_KM = 10.0; // Começa a 10km de distância
+const CYCLE_MINUTES = 20;
+const MAX_DISTANCE_KM = 10.0;
 
-// Pontos fixos para cálculo de proximidade (Exemplo)
+// Pontos fixos para cálculo de proximidade
 const ECOPONTOS = [
   { title: "Ecoponto Boa Viagem", latitude: -8.1275, longitude: -34.902 },
   { title: "Ecoponto Torre", latitude: -8.052, longitude: -34.91 },
@@ -201,13 +201,11 @@ export default function HomeScreen({ navigation }) {
 
   // --- LÓGICA DE REGISTRO SILENCIOSO NO SUPABASE ---
   useEffect(() => {
-    // 1. Gatilho: Se faltar 1 min ou menos e ainda não registrou
     if (etaMinutes <= 1 && !hasRegistered) {
-      saveNotificationToDb(); // Salva no banco (histórico)
-      setHasRegistered(true); // Trava para não duplicar
+      saveNotificationToDb();
+      setHasRegistered(true);
     }
 
-    // 2. Reset: Se o tempo voltar a ser alto (ciclo reiniciou), libera a trava
     if (etaMinutes > 5 && hasRegistered) {
       setHasRegistered(false);
     }
@@ -226,7 +224,7 @@ export default function HomeScreen({ navigation }) {
           tipo: "truck",
           lida: false,
         });
-        // console.log("Notificação salva no histórico silenciosamente.");
+        // Notificação salva no histórico silenciosamente
       }
     } catch (error) {
       console.log("Erro ao salvar histórico:", error);

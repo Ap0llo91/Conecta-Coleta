@@ -63,7 +63,7 @@ const FindDisposalSiteScreen = ({ navigation }) => {
             subLabel="(Papel, Plástico, Metal, Vidro)"
             icon="recycle"
             iconLib={MaterialCommunityIcons}
-            color="#2ECC71" // Verde Reciclagem
+            color="#2ECC71"
             onPress={() => goToEcopoints("Recicláveis")}
           />
 
@@ -72,7 +72,7 @@ const FindDisposalSiteScreen = ({ navigation }) => {
             label="Pilhas e Baterias"
             icon="battery-charging"
             iconLib={MaterialCommunityIcons}
-            color="#F57C00" // Laranja
+            color="#F57C00"
             onPress={() => goToEcopoints("Pilhas")}
           />
 
@@ -80,26 +80,24 @@ const FindDisposalSiteScreen = ({ navigation }) => {
             label="Eletrônicos"
             icon="laptop"
             iconLib={MaterialCommunityIcons}
-            color="#5C6BC0" // Azul Indigo
+            color="#5C6BC0"
             onPress={() => goToEcopoints("Eletrônicos")}
           />
-
-          {/* ITEM DE ÓLEO REMOVIDO DAQUI */}
 
           {/* Resíduos Volumosos e Obras (EcoEstações) */}
           <GridItem
             label="Entulho e Metralha"
             icon="dump-truck"
             iconLib={MaterialCommunityIcons}
-            color="#795548" // Marrom Terra
+            color="#795548"
             onPress={() => goToEcopoints("Entulho")}
           />
 
           <GridItem
             label="Móveis Velhos"
-            icon="sofa" // CORREÇÃO: Mudado de "couch" para "sofa"
+            icon="sofa"
             iconLib={MaterialCommunityIcons}
-            color="#8D6E63" // Marrom Claro
+            color="#8D6E63"
             onPress={() => goToEcopoints("Móveis")}
           />
 
@@ -107,7 +105,7 @@ const FindDisposalSiteScreen = ({ navigation }) => {
             label="Podas e Madeira"
             icon="tree"
             iconLib={MaterialCommunityIcons}
-            color="#388E3C" // Verde Escuro
+            color="#388E3C"
             onPress={() => goToEcopoints("Poda")}
           />
         </View>
@@ -241,7 +239,7 @@ const styles = StyleSheet.create({
     justifyContent: "space-between",
   },
   gridItem: {
-    width: "48%", // 2 colunas
+    width: "48%",
     backgroundColor: "white",
     borderRadius: 15,
     paddingVertical: 20,

@@ -12,12 +12,23 @@ import {
   FlatList,
   Platform,
 } from "react-native";
-import MapView, { Marker, Polyline, PROVIDER_GOOGLE } from "react-native-maps";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import { supabase } from "../utils/supabaseClient";
 import * as Location from "expo-location";
 import { useFocusEffect } from "@react-navigation/native";
+
+// --- PARA WEB: Importação Condicional ---
+let MapView, Marker, Polyline, PROVIDER_GOOGLE;
+
+// Só carregamos a biblioteca pesada se estivermos no Celular (Android)
+if (Platform.OS !== 'web') {
+  const Maps = require('react-native-maps');
+  MapView = Maps.default;
+  Marker = Maps.Marker;
+  Polyline = Maps.Polyline;
+  PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
+}
 
 // --- CONSTANTES & TEMA ---
 const CYCLE_MINUTES = 20;
@@ -30,9 +41,9 @@ const THEME = {
     markerBg: "#E3F2FD",
   },
   company: {
-    primary: "#F0B90B", // Amarelo da marca
-    route: "#FF8F00",   // Laranja escuro para contraste no mapa
-    truck: "#EF6C00",   // Laranja vibrante para o caminhão
+    primary: "#F0B90B",
+    route: "#FF8F00",
+    truck: "#EF6C00",
     markerBg: "#FFF8E1",
   }
 };
@@ -55,6 +66,8 @@ const getDistanceKm = (lat1, lon1, lat2, lon2) => {
 
 // Componente para evitar renderizações excessivas nos marcadores
 const StableMarker = ({ coordinate, onPress, children, anchor, flat }) => {
+  if (Platform.OS === 'web' || !Marker) return null;
+
   const [tracksViewChanges, setTracksViewChanges] = useState(true);
   useEffect(() => {
     const timer = setTimeout(() => setTracksViewChanges(false), 500);
@@ -306,7 +319,7 @@ export default function MapScreen({ navigation }) {
   const [isCompany, setIsCompany] = useState(false);
   const theme = isCompany ? THEME.company : THEME.citizen;
 
-  // --- CARREGAMENTO DE DADOS (CORRIGIDO COM USEFOCUS) ---
+  // --- CARREGAMENTO DE DADOS ---
   useFocusEffect(
     useCallback(() => {
       loadMapData();
@@ -314,6 +327,11 @@ export default function MapScreen({ navigation }) {
   );
 
   const loadMapData = async () => {
+    if (Platform.OS === 'web') {
+        setLoadingLocation(false);
+        return;
+    }
+
     setLoadingLocation(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
@@ -337,7 +355,7 @@ export default function MapScreen({ navigation }) {
           .from("enderecos")
           .select("*")
           .eq("usuario_id", user.id)
-          .order('created_at', { ascending: false }) // Pega sempre o mais novo se houver multiplos
+          .order('created_at', { ascending: false })
           .limit(1)
           .maybeSingle();
 
@@ -365,7 +383,7 @@ export default function MapScreen({ navigation }) {
 
             await fetchStreetRoute(latitude, longitude);
             setLoadingLocation(false);
-            return; // Sucesso com endereço do banco
+            return;
           }
         }
       }
@@ -395,7 +413,12 @@ export default function MapScreen({ navigation }) {
   };
 
   const processedPoints = useMemo(() => {
-    if (!userLocation) return { ecopontos: [], reciclagem: [] };
+    // Se não tiver local (ou for web), retorna vazio ou sem distancia
+    if (!userLocation) {
+        const rawEco = FIXED_POINTS.filter((p) => p.type === "ecoponto").map(p => ({...p, distance: 0}));
+        const rawRec = FIXED_POINTS.filter((p) => p.type === "reciclagem").map(p => ({...p, distance: 0}));
+        return { ecopontos: rawEco, reciclagem: rawRec };
+    }
 
     const pointsWithDistance = FIXED_POINTS.map((p) => ({
       ...p,
@@ -414,10 +437,10 @@ export default function MapScreen({ navigation }) {
   }, [userLocation]);
 
   const nearestReciclagem = processedPoints.reciclagem.length > 0 ? processedPoints.reciclagem[0] : null;
-  const nearestReciclagemDist = nearestReciclagem ? `${nearestReciclagem.distance.toFixed(1)} km` : "-- km";
+  const nearestReciclagemDist = nearestReciclagem && userLocation ? `${nearestReciclagem.distance.toFixed(1)} km` : "-- km";
 
   const nearestEcoponto = processedPoints.ecopontos.length > 0 ? processedPoints.ecopontos[0] : null;
-  const nearestEcopontoDist = nearestEcoponto ? `${nearestEcoponto.distance.toFixed(1)} km` : "-- km";
+  const nearestEcopontoDist = nearestEcoponto && userLocation ? `${nearestEcoponto.distance.toFixed(1)} km` : "-- km";
   const ecopontosCount = processedPoints.ecopontos.length;
 
   // --- FUNÇÕES AUXILIARES ---
@@ -449,6 +472,7 @@ export default function MapScreen({ navigation }) {
   };
 
   const fetchStreetRoute = async (userLat, userLng) => {
+    if (Platform.OS === 'web') return;
     try {
       const startLat = userLat - 0.02;
       const startLng = userLng - 0.01;
@@ -474,6 +498,7 @@ export default function MapScreen({ navigation }) {
   };
 
   useEffect(() => {
+    if (Platform.OS === 'web') return; 
     const interval = setInterval(() => {
       if (truckRoute.length > 0) {
         const newPos = calculateTruckPosition(truckRoute);
@@ -484,6 +509,10 @@ export default function MapScreen({ navigation }) {
   }, [truckRoute]);
 
   const handleCenterOnTruck = () => {
+    if (Platform.OS === 'web') {
+        Alert.alert("Atenção", "Rastreamento em tempo real disponível apenas no App Mobile.");
+        return;
+    }
     if (mapRef.current && currentTruckPos) {
       mapRef.current.animateToRegion(
         {
@@ -499,6 +528,7 @@ export default function MapScreen({ navigation }) {
   };
 
   const handleRecenterUser = () => {
+    if (Platform.OS === 'web') return;
     if (mapRef.current && userLocation) {
       mapRef.current.animateToRegion(
         {
@@ -523,7 +553,7 @@ export default function MapScreen({ navigation }) {
       case "reciclagem":
         return (
           <MarkerIcon
-            color={theme.primary} // Usa cor do tema
+            color={theme.primary}
             icon="recycle"
             library="MaterialCommunityIcons"
           />
@@ -553,120 +583,139 @@ export default function MapScreen({ navigation }) {
         showsVerticalScrollIndicator={false}
       >
         <View style={styles.mapWrapper}>
-          {loadingLocation && (
-            <View style={styles.mapLoadingOverlay}>
-              <ActivityIndicator size="large" color={theme.primary} />
-              <Text style={{ marginTop: 10, color: "#555" }}>
-                Localizando seu endereço...
-              </Text>
-            </View>
-          )}
+          
+          {/* --- RENDERIZAÇÃO CONDICIONAL DO MAPA --- */}
+          {Platform.OS === 'web' ? (
+              // VISUALIZAÇÃO PARA WEB
+              <View style={styles.webPlaceholder}>
+                  <MaterialCommunityIcons name="cellphone-off" size={60} color="#ccc" />
+                  <Text style={styles.webTitle}>Mapa Indisponível na Web</Text>
+                  <Text style={styles.webText}>
+                      O rastreamento do caminhão em tempo real e o mapa interativo utilizam recursos nativos (GPS e animações) exclusivos do aplicativo móvel.
+                  </Text>
+                  <View style={styles.webBadge}>
+                      <Text style={styles.webBadgeText}>Disponível no Android</Text>
+                  </View>
+              </View>
+          ) : (
+              // VISUALIZAÇÃO PARA CELULAR (Mapa Completo)
+              <>
+                {loadingLocation && (
+                    <View style={styles.mapLoadingOverlay}>
+                    <ActivityIndicator size="large" color={theme.primary} />
+                    <Text style={{ marginTop: 10, color: "#555" }}>
+                        Localizando seu endereço...
+                    </Text>
+                    </View>
+                )}
 
-          <MapView
-            ref={mapRef}
-            style={styles.map}
-            customMapStyle={MAP_STYLE}
-            provider={PROVIDER_GOOGLE}
-            initialRegion={
-              userLocation || {
-                latitude: -8.0849,
-                longitude: -34.9027,
-                latitudeDelta: 0.12,
-                longitudeDelta: 0.12,
-              }
-            }
-            showsUserLocation={true}
-            showsMyLocationButton={false}
-            onPress={() => {
-              setSelectedPoint(null);
-              setShowFilters(false);
-            }}
-          >
-            {filters.caminhao && truckRoute.length > 1 && (
-              <Polyline
-                coordinates={truckRoute}
-                strokeColor={theme.route} // COR DA ROTA DINÂMICA
-                strokeWidth={4}
-              />
-            )}
-
-            {userLocation && (
-              <Marker coordinate={userLocation} title="Seu Endereço">
-                <View style={[styles.homeMarker, { backgroundColor: '#FF5722' }]}>
-                  <Ionicons name="home" size={16} color="white" />
-                </View>
-              </Marker>
-            )}
-
-            {FIXED_POINTS.map((point) => {
-              if (!filters[point.type]) return null;
-              return (
-                <StableMarker
-                  key={point.id}
-                  coordinate={point.coords}
-                  onPress={() => setSelectedPoint(point)}
+                <MapView
+                    ref={mapRef}
+                    style={styles.map}
+                    customMapStyle={MAP_STYLE}
+                    provider={PROVIDER_GOOGLE}
+                    initialRegion={
+                    userLocation || {
+                        latitude: -8.0849,
+                        longitude: -34.9027,
+                        latitudeDelta: 0.12,
+                        longitudeDelta: 0.12,
+                    }
+                    }
+                    showsUserLocation={true}
+                    showsMyLocationButton={false}
+                    onPress={() => {
+                        setSelectedPoint(null);
+                        setShowFilters(false);
+                    }}
                 >
-                  {renderMarkerIcon(point.type)}
-                </StableMarker>
-              );
-            })}
+                    {filters.caminhao && truckRoute.length > 1 && (
+                    <Polyline
+                        coordinates={truckRoute}
+                        strokeColor={theme.route}
+                        strokeWidth={4}
+                    />
+                    )}
 
-            {filters.caminhao && currentTruckPos && (
-              <StableMarker
-                coordinate={currentTruckPos}
-                onPress={() =>
-                  setSelectedPoint({
-                    type: "caminhao",
-                    title: "Caminhão da Coleta",
-                  })
-                }
-                anchor={{ x: 0.5, y: 0.5 }}
-              >
-                <View style={[styles.optimizedTruckMarker, { backgroundColor: theme.truck }]}>
-                  <MaterialCommunityIcons
-                    name="truck-delivery"
-                    size={22}
-                    color="white"
-                  />
+                    {userLocation && (
+                    <Marker coordinate={userLocation} title="Seu Endereço">
+                        <View style={[styles.homeMarker, { backgroundColor: '#FF5722' }]}>
+                        <Ionicons name="home" size={16} color="white" />
+                        </View>
+                    </Marker>
+                    )}
+
+                    {FIXED_POINTS.map((point) => {
+                    if (!filters[point.type]) return null;
+                    return (
+                        <StableMarker
+                        key={point.id}
+                        coordinate={point.coords}
+                        onPress={() => setSelectedPoint(point)}
+                        >
+                        {renderMarkerIcon(point.type)}
+                        </StableMarker>
+                    );
+                    })}
+
+                    {filters.caminhao && currentTruckPos && (
+                    <StableMarker
+                        coordinate={currentTruckPos}
+                        onPress={() =>
+                        setSelectedPoint({
+                            type: "caminhao",
+                            title: "Caminhão da Coleta",
+                        })
+                        }
+                        anchor={{ x: 0.5, y: 0.5 }}
+                    >
+                        <View style={[styles.optimizedTruckMarker, { backgroundColor: theme.truck }]}>
+                        <MaterialCommunityIcons
+                            name="truck-delivery"
+                            size={22}
+                            color="white"
+                        />
+                        </View>
+                    </StableMarker>
+                    )}
+                </MapView>
+
+                <View style={styles.legendCard}>
+                    <LegendItem color="#2ECC71" text="Ecopontos" />
+                    <LegendItem color={theme.primary} text="Reciclagem" />
                 </View>
-              </StableMarker>
-            )}
-          </MapView>
 
-          <View style={styles.legendCard}>
-            <LegendItem color="#2ECC71" text="Ecopontos" />
-            <LegendItem color={theme.primary} text="Reciclagem" />
-          </View>
+                <View style={styles.floatingButtons}>
+                    <TouchableOpacity
+                    style={[
+                        styles.circleBtn,
+                        showFilters && { backgroundColor: theme.primary },
+                    ]}
+                    onPress={() => setShowFilters(!showFilters)}
+                    >
+                    <Ionicons
+                        name="filter"
+                        size={20}
+                        color={showFilters ? "white" : "#666"}
+                    />
+                    </TouchableOpacity>
 
-          <View style={styles.floatingButtons}>
-            <TouchableOpacity
-              style={[
-                styles.circleBtn,
-                showFilters && { backgroundColor: theme.primary },
-              ]}
-              onPress={() => setShowFilters(!showFilters)}
-            >
-              <Ionicons
-                name="filter"
-                size={20}
-                color={showFilters ? "white" : "#666"}
-              />
-            </TouchableOpacity>
-
-            <TouchableOpacity
-              style={styles.circleBtn}
-              onPress={handleRecenterUser}
-            >
-              <MaterialCommunityIcons
-                name="crosshairs-gps"
-                size={20}
-                color="#666"
-              />
-            </TouchableOpacity>
-          </View>
+                    <TouchableOpacity
+                    style={styles.circleBtn}
+                    onPress={handleRecenterUser}
+                    >
+                    <MaterialCommunityIcons
+                        name="crosshairs-gps"
+                        size={20}
+                        color="#666"
+                    />
+                    </TouchableOpacity>
+                </View>
+              </>
+          )}
         </View>
 
-        {showFilters && (
+        {showFilters && Platform.OS !== 'web' && (
           <View style={styles.filterSection}>
             <View style={styles.filterHeader}>
               <Ionicons
@@ -804,11 +853,13 @@ export default function MapScreen({ navigation }) {
                     <View style={{ flex: 1, marginHorizontal: 10 }}>
                       <Text style={styles.listItemTitle}>{item.title}</Text>
                       <Text style={styles.listItemAddress}>{item.address}</Text>
-                      <View style={styles.listItemDistanceBadge}>
-                        <Text style={styles.listItemDistanceText}>
-                          {item.distance.toFixed(1)} km
-                        </Text>
-                      </View>
+                      {item.distance > 0 && (
+                          <View style={styles.listItemDistanceBadge}>
+                            <Text style={styles.listItemDistanceText}>
+                              {item.distance.toFixed(1)} km
+                            </Text>
+                          </View>
+                      )}
                     </View>
                     <TouchableOpacity
                       style={[styles.listItemButton, { backgroundColor: theme.primary }]}
@@ -1086,6 +1137,41 @@ const styles = StyleSheet.create({
     shadowRadius: 5,
     shadowOffset: { width: 0, height: 2 },
   },
+  
+  // ESTILOS NOVOS PARA WEB
+  webPlaceholder: {
+      flex: 1,
+      justifyContent: 'center',
+      alignItems: 'center',
+      backgroundColor: '#EEEEEE',
+      padding: 30
+  },
+  webTitle: {
+      fontSize: 18,
+      fontWeight: 'bold',
+      color: '#555',
+      marginTop: 15,
+      marginBottom: 10
+  },
+  webText: {
+      fontSize: 14,
+      color: '#777',
+      textAlign: 'center',
+      lineHeight: 20,
+      marginBottom: 20
+  },
+  webBadge: {
+      backgroundColor: '#007BFF',
+      paddingHorizontal: 15,
+      paddingVertical: 8,
+      borderRadius: 20
+  },
+  webBadgeText: {
+      color: 'white',
+      fontWeight: 'bold',
+      fontSize: 12
+  },
+
   map: { width: "100%", height: "100%" },
   mapLoadingOverlay: {
     ...StyleSheet.absoluteFillObject,
@@ -1150,7 +1236,6 @@ const styles = StyleSheet.create({
     width: 36,
     height: 36,
     borderRadius: 18,
-    // Background color is dynamic
     justifyContent: "center",
     alignItems: "center",
     borderWidth: 2,
@@ -1175,7 +1260,6 @@ const styles = StyleSheet.create({
     width: 45,
     height: 45,
     borderRadius: 22.5,
-    // Background color is dynamic
     justifyContent: "center",
     alignItems: "center",
     marginRight: 15,
@@ -1246,7 +1330,7 @@ const styles = StyleSheet.create({
   },
   chipText: { fontSize: 12, fontWeight: "bold" },
 
-  // MODAL PRINCIPAL (Pop-up do Marker)
+  // MODAL PRINCIPAL
   modalBackdrop: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.4)",
@@ -1277,7 +1361,7 @@ const styles = StyleSheet.create({
   modalButtonText: { color: "white", fontWeight: "bold", fontSize: 16 },
   bodyText: { fontSize: 15, color: "#444" },
 
-  // NOVO MODAL DE LISTA (Bottom Sheet Style)
+  // MODAL DE LISTA
   listModalContainer: {
     flex: 1,
     backgroundColor: "rgba(0,0,0,0.5)",
@@ -1330,7 +1414,6 @@ const styles = StyleSheet.create({
   listItemDistanceText: { fontSize: 11, fontWeight: "bold", color: "#2E7D32" },
   listItemButton: {
     padding: 10,
-    // Background color is dynamic
     borderRadius: 10,
     marginLeft: 10,
   },

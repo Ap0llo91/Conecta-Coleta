@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useRef, useMemo } from 'react';
+import React, { useState, useEffect } from "react";
 import {
   View,
   Text,
@@ -6,39 +6,191 @@ import {
   ScrollView,
   TouchableOpacity,
   ActivityIndicator,
-  Linking, 
+  Linking,
   Platform,
-  FlatList
-} from 'react-native';
-import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
-import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
-import * as Location from 'expo-location';
+} from "react-native";
+import { SafeAreaView } from "react-native-safe-area-context";
+import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
+import * as Location from "expo-location";
+
+// PARA WEB: Importação Condicional do Mapa ---
+let MapView, Marker, PROVIDER_GOOGLE;
+
+if (Platform.OS !== "web") {
+  // Só carrega a biblioteca de mapas se NÃO for web
+  const Maps = require("react-native-maps");
+  MapView = Maps.default;
+  Marker = Maps.Marker;
+  PROVIDER_GOOGLE = Maps.PROVIDER_GOOGLE;
+}
 
 // --- LISTA COMPLETA DE PONTOS (ECOPONTOS + RECICLAGEM) ---
-// Mesma base de dados do MapScreen para consistência
 const RAW_POINTS = [
   // ECOPONTOS (Oficiais da Prefeitura/Emlurb)
-  { id: 1, type: 'ecoponto', title: 'EcoEstação Boa Viagem', address: 'Rua Padre Carapuceiro, s/n - Boa Viagem', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.1275, longitude: -34.9020 }, tags: ['Entulho', 'Poda', 'Móveis', 'Recicláveis'] },
-  { id: 2, type: 'ecoponto', title: 'EcoEstação Imbiribeira', address: 'Av. Mascarenhas de Morais (ao lado do Viaduto Tancredo Neves)', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.1130, longitude: -34.9120 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
-  { id: 3, type: 'ecoponto', title: 'EcoEstação Ibura', address: 'Rua Rio Tapado (prox. BR-101) - Ibura', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.1310, longitude: -34.9350 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
-  { id: 4, type: 'ecoponto', title: 'EcoEstação Torre', address: 'Rua Ciclovia República da Argélia - Torre', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.0480, longitude: -34.9100 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
-  { id: 5, type: 'ecoponto', title: 'EcoEstação Campo Grande', address: 'Av. Agamenon Magalhães x Rua Odorico Mendes', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.0350, longitude: -34.8900 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
-  { id: 6, type: 'ecoponto', title: 'EcoEstação Cais de Santa Rita', address: 'Travessa Cais de Santa Rita - São José', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.0680, longitude: -34.8780 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
-  { id: 7, type: 'ecoponto', title: 'EcoEstação Arruda', address: 'Av. Professor José dos Anjos - Arruda', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.0250, longitude: -34.8900 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
-  { id: 8, type: 'ecoponto', title: 'EcoEstação Torrões', address: 'Rua Maestro Jones Johnson - Torrões', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.0600, longitude: -34.9300 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
-  { id: 9, type: 'ecoponto', title: 'Econúcleo Jaqueira', address: 'Parque da Jaqueira - Graças', hours: 'Qui-Dom: 9h-17h', coords: { latitude: -8.0375, longitude: -34.9065 }, tags: ['Educação Ambiental', 'Recicláveis Leves'] },
-  { id: 10, type: 'ecoponto', title: 'EcoEstação Cohab', address: 'Av. Rio Largo x Av. Santos - Cohab/Ibura', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.1250, longitude: -34.9450 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
-  { id: 11, type: 'ecoponto', title: 'EcoEstação Totó', address: 'Rua Onze de Agosto x Rua Nelson de Sena', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.0900, longitude: -34.9550 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
-  { id: 12, type: 'ecoponto', title: 'Econúcleo Barbalho', address: 'Estrada do Barbalho - Iputinga', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.0420, longitude: -34.9250 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
-  { id: 13, type: 'ecoponto', title: 'EcoEstação Nova Descoberta', address: 'Rua Nova Descoberta, 1062', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.0120, longitude: -34.9280 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
-  { id: 14, type: 'ecoponto', title: 'EcoEstação Cabanga', address: 'Av. Saturnino de Brito - Cabanga', hours: 'Seg-Sáb: 8h-16h', coords: { latitude: -8.0750, longitude: -34.8900 }, tags: ['Entulho', 'Poda', 'Recicláveis'] },
+  {
+    id: 1,
+    type: "ecoponto",
+    title: "EcoEstação Boa Viagem",
+    address: "Rua Padre Carapuceiro, s/n - Boa Viagem",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.1275, longitude: -34.902 },
+    tags: ["Entulho", "Poda", "Móveis", "Recicláveis"],
+  },
+  {
+    id: 2,
+    type: "ecoponto",
+    title: "EcoEstação Imbiribeira",
+    address: "Av. Mascarenhas de Morais (ao lado do Viaduto Tancredo Neves)",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.113, longitude: -34.912 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
+  {
+    id: 3,
+    type: "ecoponto",
+    title: "EcoEstação Ibura",
+    address: "Rua Rio Tapado (prox. BR-101) - Ibura",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.131, longitude: -34.935 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
+  {
+    id: 4,
+    type: "ecoponto",
+    title: "EcoEstação Torre",
+    address: "Rua Ciclovia República da Argélia - Torre",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.048, longitude: -34.91 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
+  {
+    id: 5,
+    type: "ecoponto",
+    title: "EcoEstação Campo Grande",
+    address: "Av. Agamenon Magalhães x Rua Odorico Mendes",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.035, longitude: -34.89 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
+  {
+    id: 6,
+    type: "ecoponto",
+    title: "EcoEstação Cais de Santa Rita",
+    address: "Travessa Cais de Santa Rita - São José",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.068, longitude: -34.878 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
+  {
+    id: 7,
+    type: "ecoponto",
+    title: "EcoEstação Arruda",
+    address: "Av. Professor José dos Anjos - Arruda",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.025, longitude: -34.89 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
+  {
+    id: 8,
+    type: "ecoponto",
+    title: "EcoEstação Torrões",
+    address: "Rua Maestro Jones Johnson - Torrões",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.06, longitude: -34.93 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
+  {
+    id: 9,
+    type: "ecoponto",
+    title: "Econúcleo Jaqueira",
+    address: "Parque da Jaqueira - Graças",
+    hours: "Qui-Dom: 9h-17h",
+    coords: { latitude: -8.0375, longitude: -34.9065 },
+    tags: ["Educação Ambiental", "Recicláveis Leves"],
+  },
+  {
+    id: 10,
+    type: "ecoponto",
+    title: "EcoEstação Cohab",
+    address: "Av. Rio Largo x Av. Santos - Cohab/Ibura",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.125, longitude: -34.945 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
+  {
+    id: 11,
+    type: "ecoponto",
+    title: "EcoEstação Totó",
+    address: "Rua Onze de Agosto x Rua Nelson de Sena",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.09, longitude: -34.955 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
+  {
+    id: 12,
+    type: "ecoponto",
+    title: "Econúcleo Barbalho",
+    address: "Estrada do Barbalho - Iputinga",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.042, longitude: -34.925 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
+  {
+    id: 13,
+    type: "ecoponto",
+    title: "EcoEstação Nova Descoberta",
+    address: "Rua Nova Descoberta, 1062",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.012, longitude: -34.928 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
+  {
+    id: 14,
+    type: "ecoponto",
+    title: "EcoEstação Cabanga",
+    address: "Av. Saturnino de Brito - Cabanga",
+    hours: "Seg-Sáb: 8h-16h",
+    coords: { latitude: -8.075, longitude: -34.89 },
+    tags: ["Entulho", "Poda", "Recicláveis"],
+  },
 
   // PONTOS DE ENTREGA VOLUNTÁRIA (Shoppings/Mercados - Reciclagem)
-  { id: 20, type: 'reciclagem', title: 'PEV Shopping Recife', address: 'Rua Padre Carapuceiro, 777 - Boa Viagem', hours: 'Seg-Sáb: 10h-22h', coords: { latitude: -8.1185, longitude: -34.9045 }, tags: ['Eletrônicos', 'Pilhas', 'Plástico'] },
-  { id: 21, type: 'reciclagem', title: 'PEV Plaza Casa Forte', address: 'Rua Dr. João Santos Filho, 255 - Casa Forte', hours: 'Seg-Sáb: 10h-22h', coords: { latitude: -8.0360, longitude: -34.9120 }, tags: ['Vidro', 'Papel', 'Metal'] },
-  { id: 22, type: 'reciclagem', title: 'PEV RioMar Recife', address: 'Av. República do Líbano, 251 - Pina', hours: 'Seg-Sáb: 10h-22h', coords: { latitude: -8.0860, longitude: -34.8950 }, tags: ['Eletrônicos', 'Recicláveis Gerais'] },
-  { id: 23, type: 'reciclagem', title: 'Atacadão Casa Amarela', address: 'R. Paula Batista, 680 - Casa Amarela, Recife - PE, 52070-070', hours: 'Seg-Sáb: 7h-21h', coords: { latitude: -8.0280, longitude: -34.9200 }, tags: ['Pilhas', 'Baterias'] },
+  {
+    id: 20,
+    type: "reciclagem",
+    title: "PEV Shopping Recife",
+    address: "Rua Padre Carapuceiro, 777 - Boa Viagem",
+    hours: "Seg-Sáb: 10h-22h",
+    coords: { latitude: -8.1185, longitude: -34.9045 },
+    tags: ["Eletrônicos", "Pilhas", "Plástico"],
+  },
+  {
+    id: 21,
+    type: "reciclagem",
+    title: "PEV Plaza Casa Forte",
+    address: "Rua Dr. João Santos Filho, 255 - Casa Forte",
+    hours: "Seg-Sáb: 10h-22h",
+    coords: { latitude: -8.036, longitude: -34.912 },
+    tags: ["Vidro", "Papel", "Metal"],
+  },
+  {
+    id: 22,
+    type: "reciclagem",
+    title: "PEV RioMar Recife",
+    address: "Av. República do Líbano, 251 - Pina",
+    hours: "Seg-Sáb: 10h-22h",
+    coords: { latitude: -8.086, longitude: -34.895 },
+    tags: ["Eletrônicos", "Recicláveis Gerais"],
+  },
+  {
+    id: 23,
+    type: "reciclagem",
+    title: "Atacadão Casa Amarela",
+    address: "R. Paula Batista, 680 - Casa Amarela, Recife - PE, 52070-070",
+    hours: "Seg-Sáb: 7h-21h",
+    coords: { latitude: -8.028, longitude: -34.92 },
+    tags: ["Pilhas", "Baterias"],
+  },
 ];
 
 export default function EcopointsScreen({ navigation, route }) {
@@ -47,11 +199,17 @@ export default function EcopointsScreen({ navigation, route }) {
   const [loading, setLoading] = useState(true);
   const [errorMsg, setErrorMsg] = useState(null);
 
-  // Filtro que vem da tela anterior (Home)
-  const filterParam = route.params?.filter; // ex: 'ecoponto' ou 'reciclagem'
+  const filterParam = route.params?.filter;
 
   // --- FUNÇÃO PARA ABRIR O MAPA ---
   const openGps = (lat, lng, label) => {
+    if (Platform.OS === "web") {
+      Linking.openURL(
+        `https://www.google.com/maps/search/?api=1&query=${lat},${lng}`
+      );
+      return;
+    }
+
     const scheme = Platform.select({
       ios: "maps:0,0?q=",
       android: "geo:0,0?q=",
@@ -61,18 +219,17 @@ export default function EcopointsScreen({ navigation, route }) {
 
     const url = Platform.select({
       ios: `maps:0,0?q=${labelEncoded}@${latLng}`,
-      android: `google.navigation:q=${latLng}`, // Força abrir navegação no Android
+      android: `google.navigation:q=${latLng}`,
     });
 
     Linking.openURL(url).catch(() => {
-      // Fallback
       Linking.openURL(
         `https://www.google.com/maps/dir/?api=1&destination=${lat},${lng}`
       );
     });
   };
 
-  // Cálculo de Distância (Haversine)
+  // Cálculo de Distância
   const getDistanceFromLatLonInKm = (lat1, lon1, lat2, lon2) => {
     const R = 6371;
     const dLat = deg2rad(lat2 - lat1);
@@ -93,37 +250,43 @@ export default function EcopointsScreen({ navigation, route }) {
     (async () => {
       setLoading(true);
 
-      let { status } = await Location.requestForegroundPermissionsAsync();
-      let currentUserLoc = { latitude: -8.0631, longitude: -34.8711 }; // Default Marco Zero
+      let currentUserLoc = { latitude: -8.0631, longitude: -34.8711 };
 
-      if (status !== "granted") {
-        setErrorMsg("Permissão negada. Mostrando distâncias do Marco Zero.");
+      if (Platform.OS !== "web") {
+        let { status } = await Location.requestForegroundPermissionsAsync();
+        if (status !== "granted") {
+          setErrorMsg("Permissão negada. Mostrando distâncias do Marco Zero.");
+        } else {
+          let location = await Location.getCurrentPositionAsync({});
+          currentUserLoc = location.coords;
+          setUserLocation(location.coords);
+        }
       } else {
-        let location = await Location.getCurrentPositionAsync({});
-        currentUserLoc = location.coords;
-        setUserLocation(location.coords);
+        try {
+          let location = await Location.getCurrentPositionAsync({});
+          currentUserLoc = location.coords;
+          setUserLocation(location.coords);
+        } catch (e) {
+          console.log("Localização web não disponível ou bloqueada");
+        }
       }
 
-      // Filtragem inicial baseada no parametro da rota
       let filteredList = RAW_POINTS;
-      
+
       if (filterParam) {
-          // Se o filtro for 'ecoponto' ou 'reciclagem', filtramos pelo TYPE
-          if (filterParam === 'ecoponto' || filterParam === 'reciclagem') {
-              filteredList = RAW_POINTS.filter(p => p.type === filterParam);
-          } else {
-              // Se for um filtro de texto genérico (busca)
-              filteredList = RAW_POINTS.filter((p) =>
-                p.tags.some(
-                  (tag) =>
-                    tag.toLowerCase().includes(filterParam.toLowerCase()) ||
-                    tag === "Todos os tipos"
-                )
-              );
-          }
+        if (filterParam === "ecoponto" || filterParam === "reciclagem") {
+          filteredList = RAW_POINTS.filter((p) => p.type === filterParam);
+        } else {
+          filteredList = RAW_POINTS.filter((p) =>
+            p.tags.some(
+              (tag) =>
+                tag.toLowerCase().includes(filterParam.toLowerCase()) ||
+                tag === "Todos os tipos"
+            )
+          );
+        }
       }
 
-      // Calcula distância e ordena
       const sortedList = filteredList
         .map((point) => {
           const dist = getDistanceFromLatLonInKm(
@@ -142,8 +305,7 @@ export default function EcopointsScreen({ navigation, route }) {
   }, [filterParam]);
 
   const renderMarkerIcon = (type) => {
-      // Retorna cor baseada no tipo para o mapa pequeno
-      return type === 'ecoponto' ? '#2ECC71' : '#007BFF';
+    return type === "ecoponto" ? "#2ECC71" : "#007BFF";
   };
 
   return (
@@ -159,7 +321,11 @@ export default function EcopointsScreen({ navigation, route }) {
         </TouchableOpacity>
         <View style={styles.headerTexts}>
           <Text style={styles.headerTitle}>
-            {filterParam === 'ecoponto' ? 'Ecopontos Oficiais' : filterParam === 'reciclagem' ? 'Pontos de Reciclagem' : 'Locais Próximos'}
+            {filterParam === "ecoponto"
+              ? "Ecopontos Oficiais"
+              : filterParam === "reciclagem"
+              ? "Pontos de Reciclagem"
+              : "Locais Próximos"}
           </Text>
           <Text style={styles.headerSubtitle}>
             {points.length} locais encontrados ordenados por proximidade
@@ -178,34 +344,51 @@ export default function EcopointsScreen({ navigation, route }) {
         <ScrollView style={styles.content} showsVerticalScrollIndicator={false}>
           {/* Mapa Pequeno no Topo para Contexto */}
           <View style={styles.mapContainer}>
-            <MapView
-              style={styles.map}
-              provider={PROVIDER_GOOGLE}
-              region={{
-                latitude: userLocation ? userLocation.latitude : -8.0631,
-                longitude: userLocation ? userLocation.longitude : -34.8711,
-                latitudeDelta: 0.12, // Zoom adequado para ver vários pontos
-                longitudeDelta: 0.12,
-              }}
-              showsUserLocation={true}
-            >
-              {points.map((point) => (
-                <Marker
-                  key={point.id}
-                  coordinate={point.coords}
-                  title={point.title}
-                  pinColor={renderMarkerIcon(point.type)} // Cor do pino
-                  onCalloutPress={() =>
-                    openGps(
-                      point.coords.latitude,
-                      point.coords.longitude,
-                      point.title
-                    )
-                  }
+            {/* CORREÇÃO PARA WEB: Renderização Condicional */}
+            {Platform.OS === "web" ? (
+              <View style={styles.webMapPlaceholder}>
+                <MaterialCommunityIcons
+                  name="map-search-outline"
+                  size={40}
+                  color="#00A859"
                 />
-              ))}
-            </MapView>
-            <View style={styles.mapOverlay} pointerEvents="none" />
+                <Text style={styles.webMapText}>
+                  Mapa interativo disponível no App Mobile.{"\n"}
+                  Clique em "Navegar" na lista abaixo para ver a rota.
+                </Text>
+              </View>
+            ) : (
+              <>
+                <MapView
+                  style={styles.map}
+                  provider={PROVIDER_GOOGLE}
+                  region={{
+                    latitude: userLocation ? userLocation.latitude : -8.0631,
+                    longitude: userLocation ? userLocation.longitude : -34.8711,
+                    latitudeDelta: 0.12,
+                    longitudeDelta: 0.12,
+                  }}
+                  showsUserLocation={true}
+                >
+                  {points.map((point) => (
+                    <Marker
+                      key={point.id}
+                      coordinate={point.coords}
+                      title={point.title}
+                      pinColor={renderMarkerIcon(point.type)}
+                      onCalloutPress={() =>
+                        openGps(
+                          point.coords.latitude,
+                          point.coords.longitude,
+                          point.title
+                        )
+                      }
+                    />
+                  ))}
+                </MapView>
+                <View style={styles.mapOverlay} pointerEvents="none" />
+              </>
+            )}
           </View>
 
           {/* Lista de Cards Ordenada */}
@@ -214,7 +397,6 @@ export default function EcopointsScreen({ navigation, route }) {
 
             {points.map((item, index) => (
               <View key={item.id} style={styles.card}>
-                {/* Tag de "Mais Próximo" apenas para o primeiro */}
                 {index === 0 && (
                   <View style={styles.nearestBadge}>
                     <Text style={styles.nearestText}>MAIS PRÓXIMO</Text>
@@ -222,13 +404,20 @@ export default function EcopointsScreen({ navigation, route }) {
                 )}
 
                 <View style={styles.cardHeaderRow}>
-                  {/* Lado Esquerdo: Ícone + Textos */}
                   <View style={styles.cardLeftInfo}>
-                    <View style={[styles.iconBg, { backgroundColor: item.type === 'ecoponto' ? '#E8F5E9' : '#E3F2FD' }]}>
+                    <View
+                      style={[
+                        styles.iconBg,
+                        {
+                          backgroundColor:
+                            item.type === "ecoponto" ? "#E8F5E9" : "#E3F2FD",
+                        },
+                      ]}
+                    >
                       <Ionicons
-                        name={item.type === 'ecoponto' ? "leaf" : "sync"}
+                        name={item.type === "ecoponto" ? "leaf" : "sync"}
                         size={24}
-                        color={item.type === 'ecoponto' ? "#2ECC71" : "#007BFF"}
+                        color={item.type === "ecoponto" ? "#2ECC71" : "#007BFF"}
                       />
                     </View>
                     <View style={{ flex: 1, marginRight: 5 }}>
@@ -237,7 +426,6 @@ export default function EcopointsScreen({ navigation, route }) {
                     </View>
                   </View>
 
-                  {/* Lado Direito: BOTÃO DE NAVEGAR */}
                   <TouchableOpacity
                     style={styles.navButton}
                     onPress={() =>
@@ -248,11 +436,14 @@ export default function EcopointsScreen({ navigation, route }) {
                       )
                     }
                   >
-                    <MaterialCommunityIcons name="google-maps" size={24} color="white" />
+                    <MaterialCommunityIcons
+                      name="google-maps"
+                      size={24}
+                      color="white"
+                    />
                   </TouchableOpacity>
                 </View>
 
-                {/* Distância Calculada */}
                 <View style={styles.infoRow}>
                   <Ionicons
                     name="navigate-circle-outline"
@@ -267,13 +458,9 @@ export default function EcopointsScreen({ navigation, route }) {
                   </Text>
                 </View>
 
-                {/* Tags de Materiais */}
                 <View style={styles.tagsRow}>
                   {item.tags.map((tag) => (
-                    <View
-                      key={tag}
-                      style={styles.tag}
-                    >
+                    <View key={tag} style={styles.tag}>
                       <Text style={styles.tagText}>{tag}</Text>
                     </View>
                   ))}
@@ -292,22 +479,26 @@ export default function EcopointsScreen({ navigation, route }) {
                     <Text style={styles.footerText}>{item.hours}</Text>
                   </View>
                   {item.phone && (
-                      <View style={styles.footerItem}>
-                        <Ionicons
-                          name="call-outline"
-                          size={14}
-                          color="#666"
-                          style={{ marginRight: 4 }}
-                        />
-                        <Text style={styles.footerText}>{item.phone}</Text>
-                      </View>
+                    <View style={styles.footerItem}>
+                      <Ionicons
+                        name="call-outline"
+                        size={14}
+                        color="#666"
+                        style={{ marginRight: 4 }}
+                      />
+                      <Text style={styles.footerText}>{item.phone}</Text>
+                    </View>
                   )}
                 </View>
               </View>
             ))}
-            
+
             {points.length === 0 && !loading && (
-                <Text style={{textAlign: 'center', marginTop: 20, color: '#999'}}>Nenhum local encontrado.</Text>
+              <Text
+                style={{ textAlign: "center", marginTop: 20, color: "#999" }}
+              >
+                Nenhum local encontrado.
+              </Text>
             )}
           </View>
 
@@ -335,18 +526,35 @@ const styles = StyleSheet.create({
   centerLoading: { flex: 1, justifyContent: "center", alignItems: "center" },
 
   mapContainer: {
-    height: 180, // Um pouco menor para dar foco na lista
+    height: 180,
     backgroundColor: "#EEE",
     borderBottomLeftRadius: 25,
     borderBottomRightRadius: 25,
     overflow: "hidden",
     elevation: 5,
     marginBottom: 10,
+    justifyContent: "center",
+    alignItems: "center",
   },
   map: { width: "100%", height: "100%" },
+
+  // Estilo para Web
+  webMapPlaceholder: {
+    alignItems: "center",
+    justifyContent: "center",
+    padding: 20,
+    backgroundColor: "#E8F5E9",
+  },
+  webMapText: {
+    color: "#444",
+    textAlign: "center",
+    fontSize: 12,
+    marginTop: 8,
+  },
+
   mapOverlay: {
     ...StyleSheet.absoluteFillObject,
-    backgroundColor: "rgba(0,0,0,0.05)", // Leve sombra
+    backgroundColor: "rgba(0,0,0,0.05)",
   },
 
   ecoMarker: {
@@ -422,7 +630,7 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     alignItems: "center",
     marginLeft: 8,
-    marginTop: 15, 
+    marginTop: 15,
     elevation: 2,
     shadowColor: "#000",
     shadowOpacity: 0.1,
@@ -433,7 +641,7 @@ const styles = StyleSheet.create({
   infoRow: {
     flexDirection: "row",
     alignItems: "center",
-    marginLeft: 52, // Alinhado com o texto do título
+    marginLeft: 52,
     marginBottom: 10,
   },
   distText: { color: "#007BFF", fontWeight: "bold", fontSize: 14 },

@@ -117,7 +117,7 @@ const FAQScreen = ({ navigation }) => {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: '#F0F2F5' },
   header: {
-    backgroundColor: '#AA00FF', // Roxo Vibrante
+    backgroundColor: '#AA00FF',
     paddingTop: 20,
     paddingBottom: 25,
     paddingHorizontal: 20,
@@ -151,7 +151,7 @@ const styles = StyleSheet.create({
   questionText: {
     fontSize: 16,
     color: '#333',
-    flex: 1, // Ocupa o espaço para não sobrepor a seta
+    flex: 1,
     marginRight: 10,
   },
   cardContent: {
@@ -168,7 +168,7 @@ const styles = StyleSheet.create({
 
   // Estilo Card de Contato
   contactCard: {
-    backgroundColor: '#F3E5F5', // Roxo bem clarinho
+    backgroundColor: '#F3E5F5',
     borderRadius: 15,
     padding: 25,
     alignItems: 'center',

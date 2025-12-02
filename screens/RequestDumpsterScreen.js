@@ -16,20 +16,21 @@ import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
 import * as Location from "expo-location";
 import { supabase } from "../utils/supabaseClient";
+import DateTimePicker from "@react-native-community/datetimepicker";
 
 const RequestDumpsterScreen = ({ navigation }) => {
   const [loadingLocation, setLoadingLocation] = useState(false);
   const [loading, setLoading] = useState(false);
-  
+
   // Estados dos Modais
   const [successModalVisible, setSuccessModalVisible] = useState(false);
-  const [modalVisible, setModalVisible] = useState(false); // Modal de Tipo de Resíduo
+  const [modalVisible, setModalVisible] = useState(false);
 
-  // --- NOVOS ESTADOS PARA O ALERTA BONITO ---
+  // --- ESTADOS PARA O ALERTA BONITO ---
   const [alertModalVisible, setAlertModalVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
-  const [alertType, setAlertType] = useState("warning"); // 'warning' ou 'error'
+  const [alertType, setAlertType] = useState("warning");
 
   // Estados do Formulário
   const [nome, setNome] = useState("");
@@ -37,8 +38,12 @@ const RequestDumpsterScreen = ({ navigation }) => {
   const [endereco, setEndereco] = useState("");
   const [tipoResiduo, setTipoResiduo] = useState("");
   const [volume, setVolume] = useState("");
-  const [data, setData] = useState("");
   const [observacao, setObservacao] = useState("");
+
+  // --- ESTADOS DE DATA ---
+  const [date, setDate] = useState(new Date());
+  const [showDatePicker, setShowDatePicker] = useState(false);
+  const [textDate, setTextDate] = useState("");
 
   const tiposResiduo = [
     "Entulho de construção",
@@ -47,7 +52,7 @@ const RequestDumpsterScreen = ({ navigation }) => {
     "Outros resíduos volumosos",
   ];
 
-  // Função auxiliar para mostrar o alerta bonito
+  // Função auxiliar para mostrar o alerta
   const showCustomAlert = (title, message, type = "warning") => {
     setAlertTitle(title);
     setAlertMessage(message);
@@ -64,15 +69,19 @@ const RequestDumpsterScreen = ({ navigation }) => {
     setCpf(v);
   };
 
-  const maskDate = (text) => {
-    let v = text.replace(/\D/g, "");
-    v = v.substring(0, 8);
-    if (v.length > 4) {
-      v = v.replace(/^(\d{2})(\d{2})(\d{0,4})/, "$1/$2/$3");
-    } else if (v.length > 2) {
-      v = v.replace(/^(\d{2})(\d{0,2})/, "$1/$2");
+  // --- LÓGICA DO CALENDÁRIO ---
+  const onChangeDate = (event, selectedDate) => {
+    const currentDate = selectedDate || date;
+    setShowDatePicker(false);
+    setDate(currentDate);
+
+    if (selectedDate) {
+      // Formata para string Brasileira: DD/MM/AAAA
+      const day = currentDate.getDate().toString().padStart(2, "0");
+      const month = (currentDate.getMonth() + 1).toString().padStart(2, "0");
+      const year = currentDate.getFullYear();
+      setTextDate(`${day}/${month}/${year}`);
     }
-    setData(v);
   };
 
   const handleGetLocation = async () => {
@@ -108,9 +117,13 @@ const RequestDumpsterScreen = ({ navigation }) => {
   };
 
   const handleSubmit = async () => {
-    // 1. Validação com Alerta Bonito
-    if (!nome || !cpf || !endereco || !tipoResiduo || !volume || !data) {
-      showCustomAlert("Campos Obrigatórios", "Preencha todos os campos obrigatórios.", "warning");
+    // Validação
+    if (!nome || !cpf || !endereco || !tipoResiduo || !volume || !textDate) {
+      showCustomAlert(
+        "Campos Obrigatórios",
+        "Preencha todos os campos obrigatórios, incluindo a data.",
+        "warning"
+      );
       return;
     }
 
@@ -120,14 +133,14 @@ const RequestDumpsterScreen = ({ navigation }) => {
       const {
         data: { user },
       } = await supabase.auth.getUser();
-      
+
       if (!user) {
-          showCustomAlert("Sessão Expirada", "Faça login novamente.", "error");
-          setLoading(false);
-          return;
+        showCustomAlert("Sessão Expirada", "Faça login novamente.", "error");
+        setLoading(false);
+        return;
       }
 
-      const detalhes = `Solicitação de Caçamba:\nTipo: ${tipoResiduo}\nVolume: ${volume}m³\nData: ${data}\nObs: ${observacao}`;
+      const detalhes = `Solicitação de Caçamba:\nTipo: ${tipoResiduo}\nVolume: ${volume}m³\nData Desejada: ${textDate}\nObs: ${observacao}`;
 
       const { error } = await supabase.from("chamados").insert({
         usuario_id: user.id,
@@ -142,7 +155,11 @@ const RequestDumpsterScreen = ({ navigation }) => {
       setSuccessModalVisible(true);
     } catch (error) {
       console.log("Erro ao solicitar:", error);
-      showCustomAlert("Erro no Envio", "Falha ao enviar solicitação. Tente novamente.", "error");
+      showCustomAlert(
+        "Erro no Envio",
+        "Falha ao enviar solicitação. Tente novamente.",
+        "error"
+      );
     } finally {
       setLoading(false);
     }
@@ -237,15 +254,38 @@ const RequestDumpsterScreen = ({ navigation }) => {
             onChangeText={setVolume}
           />
 
+          {/* --- CAMPO DE DATA INTELIGENTE --- */}
           <Text style={styles.label}>Data Desejada</Text>
-          <TextInput
+          <TouchableOpacity
             style={styles.input}
-            placeholder="dd/mm/aaaa"
-            value={data}
-            onChangeText={maskDate}
-            keyboardType="numeric"
-            maxLength={10}
-          />
+            onPress={() => setShowDatePicker(true)}
+          >
+            <View
+              style={{
+                flexDirection: "row",
+                alignItems: "center",
+                justifyContent: "space-between",
+              }}
+            >
+              <Text
+                style={textDate ? styles.inputText : styles.placeholderText}
+              >
+                {textDate || "Toque para selecionar a data"}
+              </Text>
+              <Ionicons name="calendar-outline" size={20} color="#666" />
+            </View>
+          </TouchableOpacity>
+
+          {showDatePicker && (
+            <DateTimePicker
+              testID="dateTimePicker"
+              value={date}
+              mode="date"
+              display="default"
+              minimumDate={new Date()}
+              onChange={onChangeDate}
+            />
+          )}
 
           <Text style={styles.label}>Observações</Text>
           <TextInput
@@ -330,14 +370,19 @@ const RequestDumpsterScreen = ({ navigation }) => {
       >
         <View style={styles.centerModalOverlay}>
           <View style={styles.card}>
-            <Ionicons name="checkmark-circle" size={80} color="#2ECC71" style={{ marginBottom: 20 }} />
+            <Ionicons
+              name="checkmark-circle"
+              size={80}
+              color="#2ECC71"
+              style={{ marginBottom: 20 }}
+            />
             <Text style={styles.cardTitle}>Solicitação Enviada!</Text>
             <Text style={styles.cardMessage}>
-              Seu pedido de caçamba foi registrado.{'\n'}
+              Seu pedido de caçamba foi registrado.{"\n"}
               Nossa equipe analisará a disponibilidade.
             </Text>
             <TouchableOpacity
-              style={[styles.cardButton, { backgroundColor: '#FF4500' }]}
+              style={[styles.cardButton, { backgroundColor: "#FF4500" }]}
               onPress={handleSuccessClose}
             >
               <Text style={styles.cardButtonText}>OK, Voltar</Text>
@@ -346,28 +391,37 @@ const RequestDumpsterScreen = ({ navigation }) => {
         </View>
       </Modal>
 
-      {/* NOVO: Modal de Alerta/Erro Bonito (Genérico) */}
-      <Modal visible={alertModalVisible} animationType="fade" transparent={true}>
+      {/* Modal de Alerta/Erro Bonito */}
+      <Modal
+        visible={alertModalVisible}
+        animationType="fade"
+        transparent={true}
+      >
         <View style={styles.centerModalOverlay}>
-            <View style={styles.card}>
-                <Ionicons 
-                  name={alertType === "error" ? "alert-circle" : "warning"} 
-                  size={80} 
-                  color={alertType === "error" ? "#D92D20" : "#FF9800"} 
-                  style={{ marginBottom: 20 }} 
-                />
-                <Text style={styles.cardTitle}>{alertTitle}</Text>
-                <Text style={styles.cardMessage}>{alertMessage}</Text>
-                <TouchableOpacity 
-                    style={[styles.cardButton, { backgroundColor: alertType === "error" ? "#D92D20" : "#FF9800" }]} 
-                    onPress={() => setAlertModalVisible(false)}
-                >
-                    <Text style={styles.cardButtonText}>OK</Text>
-                </TouchableOpacity>
-            </View>
+          <View style={styles.card}>
+            <Ionicons
+              name={alertType === "error" ? "alert-circle" : "warning"}
+              size={80}
+              color={alertType === "error" ? "#D92D20" : "#FF9800"}
+              style={{ marginBottom: 20 }}
+            />
+            <Text style={styles.cardTitle}>{alertTitle}</Text>
+            <Text style={styles.cardMessage}>{alertMessage}</Text>
+            <TouchableOpacity
+              style={[
+                styles.cardButton,
+                {
+                  backgroundColor:
+                    alertType === "error" ? "#D92D20" : "#FF9800",
+                },
+              ]}
+              onPress={() => setAlertModalVisible(false)}
+            >
+              <Text style={styles.cardButtonText}>OK</Text>
+            </TouchableOpacity>
+          </View>
         </View>
       </Modal>
-
     </SafeAreaView>
   );
 };
@@ -449,7 +503,7 @@ const styles = StyleSheet.create({
     elevation: 3,
   },
   submitButtonText: { color: "white", fontSize: 18, fontWeight: "bold" },
-  
+
   // Modais Inferiores
   modalContainer: {
     flex: 1,
@@ -483,46 +537,46 @@ const styles = StyleSheet.create({
   },
   modalCloseText: { fontSize: 16, fontWeight: "bold", color: "#333" },
 
-  // --- Estilos para Modais Centrais (Sucesso e Erro) ---
+  // --- Estilos para Modais Centrais ---
   centerModalOverlay: {
     flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    backgroundColor: 'rgba(0,0,0,0.6)',
+    justifyContent: "center",
+    alignItems: "center",
+    backgroundColor: "rgba(0,0,0,0.6)",
   },
   card: {
-      width: '85%',
-      backgroundColor: 'white',
-      borderRadius: 20,
-      padding: 30,
-      alignItems: 'center',
-      elevation: 10,
+    width: "85%",
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 30,
+    alignItems: "center",
+    elevation: 10,
   },
   cardTitle: {
-      fontSize: 22,
-      fontWeight: 'bold',
-      color: '#333',
-      marginBottom: 10,
-      textAlign: 'center',
+    fontSize: 22,
+    fontWeight: "bold",
+    color: "#333",
+    marginBottom: 10,
+    textAlign: "center",
   },
   cardMessage: {
-      fontSize: 16,
-      color: '#666',
-      textAlign: 'center',
-      marginBottom: 25,
-      lineHeight: 22,
+    fontSize: 16,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 25,
+    lineHeight: 22,
   },
   cardButton: {
-      borderRadius: 30,
-      paddingVertical: 12,
-      paddingHorizontal: 40,
-      elevation: 2,
+    borderRadius: 30,
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    elevation: 2,
   },
   cardButtonText: {
-      color: 'white',
-      fontSize: 16,
-      fontWeight: 'bold',
-  }
+    color: "white",
+    fontSize: 16,
+    fontWeight: "bold",
+  },
 });
 
 export default RequestDumpsterScreen;

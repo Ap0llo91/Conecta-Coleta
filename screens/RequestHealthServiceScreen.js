@@ -106,12 +106,12 @@ export default function RequestHealthServiceScreen({ navigation }) {
         .eq('usuario_id', user.id)
         .single();
 
-      // CORREÇÃO: Busca o endereço mais recente (sem depender de is_padrao)
+      // Busca o endereço mais recente
       const { data: address } = await supabase
         .from('enderecos')
         .select('rua, numero, bairro')
         .eq('usuario_id', user.id)
-        .order('created_at', { ascending: false }) // Pega o último criado
+        .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
 

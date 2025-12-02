@@ -10,10 +10,11 @@ import {
   ActivityIndicator,
   Image,
   KeyboardAvoidingView,
-  Platform
+  Platform,
+  Modal
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Ionicons } from '@expo/vector-icons';
+import { Ionicons, MaterialCommunityIcons } from '@expo/vector-icons';
 import { supabase } from '../utils/supabaseClient';
 import * as ImagePicker from 'expo-image-picker';
 import { useFocusEffect } from '@react-navigation/native';
@@ -28,6 +29,10 @@ export default function EditProfileScreen({ navigation }) {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [isCompany, setIsCompany] = useState(false);
+
+  // Estados dos Modais
+  const [photoModalVisible, setPhotoModalVisible] = useState(false);
+  const [successVisible, setSuccessVisible] = useState(false);
 
   // Estados do Perfil
   const [nome, setNome] = useState('');
@@ -120,7 +125,6 @@ export default function EditProfileScreen({ navigation }) {
           setNumero(data.numero ? String(data.numero) : '');
           setBairro(data.bairro || '');
       } else {
-          // Fallback legado
           let r = data.rua || '';
           let n = '';
           let b = '';
@@ -179,7 +183,7 @@ export default function EditProfileScreen({ navigation }) {
         if (profile.foto_url) setImageUri(profile.foto_url);
       }
 
-      // 2. Busca o Endereço (TENTATIVA BLINDADA)
+      // 2. Busca o Endereço
       let finalAddress = null;
 
       try {
@@ -218,6 +222,7 @@ export default function EditProfileScreen({ navigation }) {
 
   // --- FOTO ---
   const pickFromGallery = async () => {
+    setPhotoModalVisible(false);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') return;
     let result = await ImagePicker.launchImageLibraryAsync({
@@ -230,6 +235,7 @@ export default function EditProfileScreen({ navigation }) {
   };
 
   const pickFromCamera = async () => {
+    setPhotoModalVisible(false);
     const { status } = await ImagePicker.requestCameraPermissionsAsync();
     if (status !== 'granted') return;
     let result = await ImagePicker.launchCameraAsync({
@@ -242,15 +248,7 @@ export default function EditProfileScreen({ navigation }) {
   };
 
   const handlePhotoOptions = () => {
-    Alert.alert(
-      "Alterar Foto",
-      "Escolha uma opção:",
-      [
-        { text: "Tirar Foto", onPress: pickFromCamera },
-        { text: "Galeria", onPress: pickFromGallery },
-        { text: "Cancelar", style: "cancel" }
-      ]
-    );
+    setPhotoModalVisible(true);
   };
 
   // --- SALVAR ---
@@ -292,9 +290,7 @@ export default function EditProfileScreen({ navigation }) {
         
       if (addrError) throw addrError;
 
-      Alert.alert('Sucesso', 'Informações atualizadas!', [
-        { text: 'OK', onPress: () => navigation.goBack() }
-      ]);
+      setSuccessVisible(true);
 
     } catch (error) {
       console.log('Erro ao salvar:', error);
@@ -303,6 +299,86 @@ export default function EditProfileScreen({ navigation }) {
       setSaving(false);
     }
   };
+
+  // --- MODAL DE OPÇÕES DE FOTO ---
+  const PhotoOptionsModal = () => (
+    <Modal
+      animationType="slide"
+      transparent={true}
+      visible={photoModalVisible}
+      onRequestClose={() => setPhotoModalVisible(false)}
+    >
+      <TouchableOpacity 
+        style={styles.modalOverlay} 
+        activeOpacity={1} 
+        onPress={() => setPhotoModalVisible(false)}
+      >
+        <View style={styles.photoModalContent}>
+          <Text style={styles.photoModalTitle}>Alterar Foto de Perfil</Text>
+          <Text style={styles.photoModalSubtitle}>Escolha uma das opções abaixo</Text>
+          
+          <View style={styles.photoOptionsRow}>
+            <TouchableOpacity style={styles.photoOptionBtn} onPress={pickFromCamera}>
+              <View style={[styles.photoOptionIcon, { backgroundColor: '#E3F2FD' }]}>
+                <Ionicons name="camera" size={28} color="#007BFF" />
+              </View>
+              <Text style={styles.photoOptionText}>Câmera</Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity style={styles.photoOptionBtn} onPress={pickFromGallery}>
+              <View style={[styles.photoOptionIcon, { backgroundColor: '#FFF3E0' }]}>
+                <Ionicons name="images" size={28} color="#F57C00" />
+              </View>
+              <Text style={styles.photoOptionText}>Galeria</Text>
+            </TouchableOpacity>
+          </View>
+
+          <TouchableOpacity 
+            style={styles.cancelButton} 
+            onPress={() => setPhotoModalVisible(false)}
+          >
+            <Text style={styles.cancelButtonText}>Cancelar</Text>
+          </TouchableOpacity>
+        </View>
+      </TouchableOpacity>
+    </Modal>
+  );
+
+  // --- MODAL DE SUCESSO ---
+  const SuccessModal = () => (
+    <Modal
+      animationType="fade"
+      transparent={true}
+      visible={successVisible}
+      onRequestClose={() => {
+        setSuccessVisible(false);
+        navigation.goBack();
+      }}
+    >
+      <View style={styles.modalOverlay}>
+        <View style={styles.successModalContent}>
+          <View style={styles.successIconCircle}>
+            <Ionicons name="checkmark" size={40} color="#FFF" />
+          </View>
+          
+          <Text style={styles.successTitle}>Sucesso!</Text>
+          <Text style={styles.successMessage}>
+            Suas informações foram atualizadas corretamente no sistema.
+          </Text>
+
+          <TouchableOpacity 
+            style={[styles.successButton, { backgroundColor: primaryColor }]} 
+            onPress={() => {
+              setSuccessVisible(false);
+              navigation.goBack();
+            }}
+          >
+            <Text style={styles.successButtonText}>OK, Voltar</Text>
+          </TouchableOpacity>
+        </View>
+      </View>
+    </Modal>
+  );
 
   if (loading) {
     return (
@@ -385,7 +461,7 @@ export default function EditProfileScreen({ navigation }) {
           <Text style={styles.label}>{isCompany ? "CNPJ" : "CPF"} (Não editável)</Text>
           <TextInput 
             style={[styles.input, styles.disabledInput]} 
-            value={cpf} // Agora o valor vem formatado
+            value={cpf}
             editable={false} 
           />
 
@@ -434,6 +510,10 @@ export default function EditProfileScreen({ navigation }) {
           <View style={{ height: 40 }} />
         </ScrollView>
       </KeyboardAvoidingView>
+
+      {/* Renderização dos Modais */}
+      <PhotoOptionsModal />
+      <SuccessModal />
     </SafeAreaView>
   );
 }
@@ -451,7 +531,7 @@ const styles = StyleSheet.create({
     borderBottomColor: '#F0F0F0',
   },
   headerTitle: { fontSize: 18, fontWeight: 'bold', color: '#333' },
-  saveButtonText: { fontSize: 16, fontWeight: 'bold' }, // Cor via style dinâmico
+  saveButtonText: { fontSize: 16, fontWeight: 'bold' },
   content: { padding: 20 },
   avatarSection: { alignItems: 'center', marginBottom: 30 },
   avatarContainer: { 
@@ -477,10 +557,10 @@ const styles = StyleSheet.create({
     backgroundColor: '#F5F5F5' 
   },
   avatarPlaceholder: {
-    width: 110,
+    width: 110, 
     height: 110, 
     borderRadius: 55, 
-    justifyContent: 'center',
+    justifyContent: 'center', 
     alignItems: 'center',
     borderWidth: 3, 
     borderColor: '#FFF',
@@ -497,7 +577,7 @@ const styles = StyleSheet.create({
     borderWidth: 2,
     borderColor: '#FFF',
   },
-  changePhotoText: { fontSize: 15, fontWeight: '600' }, // Cor via style dinâmico
+  changePhotoText: { fontSize: 15, fontWeight: '600' },
   sectionTitle: { fontSize: 16, fontWeight: 'bold', color: '#333', marginBottom: 15 },
   label: { fontSize: 14, color: '#666', marginBottom: 5, marginTop: 10 },
   input: {
@@ -511,4 +591,117 @@ const styles = StyleSheet.create({
   },
   disabledInput: { backgroundColor: '#F0F0F0', color: '#888' },
   rowContainer: { flexDirection: 'row', alignItems: 'center' },
+
+  // --- ESTILOS DOS MODAIS ---
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+    justifyContent: 'flex-end',
+  },
+  
+  // Modal de Foto
+  photoModalContent: {
+    backgroundColor: 'white',
+    borderTopLeftRadius: 20,
+    borderTopRightRadius: 20,
+    padding: 25,
+    alignItems: 'center',
+  },
+  photoModalTitle: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 5,
+  },
+  photoModalSubtitle: {
+    fontSize: 14,
+    color: '#666',
+    marginBottom: 25,
+  },
+  photoOptionsRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-around',
+    width: '100%',
+    marginBottom: 20,
+  },
+  photoOptionBtn: {
+    alignItems: 'center',
+  },
+  photoOptionIcon: {
+    width: 60,
+    height: 60,
+    borderRadius: 30,
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 10,
+  },
+  photoOptionText: {
+    fontSize: 14,
+    fontWeight: '500',
+    color: '#333',
+  },
+  cancelButton: {
+    width: '100%',
+    padding: 15,
+    alignItems: 'center',
+    borderTopWidth: 1,
+    borderTopColor: '#EEE',
+    marginTop: 10,
+  },
+  cancelButtonText: {
+    fontSize: 16,
+    color: '#FF3B30',
+    fontWeight: '600',
+  },
+
+  // Modal de Sucesso
+  successModalContent: {
+    backgroundColor: 'white',
+    borderRadius: 20,
+    padding: 30,
+    margin: 20,
+    alignItems: 'center',
+    alignSelf: 'center',
+    width: '85%',
+    elevation: 5,
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.25,
+    shadowRadius: 4,
+    marginBottom: 'auto',
+    marginTop: 'auto',
+  },
+  successIconCircle: {
+    width: 70,
+    height: 70,
+    borderRadius: 35,
+    backgroundColor: '#2ECC71',
+    justifyContent: 'center',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  successTitle: {
+    fontSize: 22,
+    fontWeight: 'bold',
+    color: '#333',
+    marginBottom: 10,
+  },
+  successMessage: {
+    fontSize: 16,
+    color: '#666',
+    textAlign: 'center',
+    marginBottom: 25,
+    lineHeight: 22,
+  },
+  successButton: {
+    borderRadius: 12,
+    paddingVertical: 12,
+    paddingHorizontal: 40,
+    elevation: 2,
+  },
+  successButtonText: {
+    color: 'white',
+    fontWeight: 'bold',
+    fontSize: 16,
+  }
 });

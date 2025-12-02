@@ -8,7 +8,7 @@ import {
   ActivityIndicator,
   RefreshControl,
   Alert,
-  Modal
+  Modal,
 } from "react-native";
 import { SafeAreaView } from "react-native-safe-area-context";
 import { Ionicons, MaterialCommunityIcons } from "@expo/vector-icons";
@@ -18,23 +18,23 @@ import { useFocusEffect } from "@react-navigation/native";
 // CORES TEMÁTICAS
 const THEME = {
   citizen: { primary: "#007BFF", light: "#E3F2FD" },
-  company: { primary: "#F0B90B", light: "#FFFDE7" }
+  company: { primary: "#F0B90B", light: "#FFFDE7" },
 };
 
 export default function NotificationsScreen({ navigation }) {
   const [notifications, setNotifications] = useState([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  
+
   // Estado do Tema (Começa como Cidadão por padrão)
   const [isCompany, setIsCompany] = useState(false);
   const theme = isCompany ? THEME.company : THEME.citizen;
 
   // Estados do Alerta Bonito
   const [alertVisible, setAlertVisible] = useState(false);
-  const [alertTitle, setAlertTitle] = useState('');
-  const [alertMessage, setAlertMessage] = useState('');
-  const [alertAction, setAlertAction] = useState(null); // Callback para ação destrutiva
+  const [alertTitle, setAlertTitle] = useState("");
+  const [alertMessage, setAlertMessage] = useState("");
+  const [alertAction, setAlertAction] = useState(null);
 
   useFocusEffect(
     useCallback(() => {
@@ -44,7 +44,9 @@ export default function NotificationsScreen({ navigation }) {
 
   const fetchNotifications = async () => {
     try {
-      const { data: { user } } = await supabase.auth.getUser();
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
       if (!user) return;
 
       // 1. Descobre o tipo de usuário para ajustar a cor
@@ -53,11 +55,11 @@ export default function NotificationsScreen({ navigation }) {
         .select("tipo_usuario")
         .eq("usuario_id", user.id)
         .single();
-      
-      if (userData && userData.tipo_usuario === 'CNPJ') {
-          setIsCompany(true);
+
+      if (userData && userData.tipo_usuario === "CNPJ") {
+        setIsCompany(true);
       } else {
-          setIsCompany(false);
+        setIsCompany(false);
       }
 
       // 2. Busca notificações
@@ -95,29 +97,29 @@ export default function NotificationsScreen({ navigation }) {
 
     // Configura o alerta de confirmação
     setAlertTitle("Limpar Notificações");
-    setAlertMessage("Tem certeza que deseja apagar todas as notificações? Essa ação não pode ser desfeita.");
+    setAlertMessage(
+      "Tem certeza que deseja apagar todas as notificações? Essa ação não pode ser desfeita."
+    );
     setAlertAction(() => async () => {
-        setNotifications([]);
-        const { data: { user } } = await supabase.auth.getUser();
-        if (user) {
-            await supabase
-            .from("notificacoes")
-            .delete()
-            .eq("usuario_id", user.id);
-        }
-        setAlertVisible(false);
+      setNotifications([]);
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+      if (user) {
+        await supabase.from("notificacoes").delete().eq("usuario_id", user.id);
+      }
+      setAlertVisible(false);
     });
     setAlertVisible(true);
   };
 
   const getIconStyle = (type) => {
-    // Cores fixas para status específicos (sucesso/erro), mas adaptável onde fizer sentido
     switch (type) {
       case "truck":
         return {
           icon: "truck-delivery-outline",
           lib: MaterialCommunityIcons,
-          color: theme.primary, // Usa cor do tema
+          color: theme.primary,
           bg: theme.light,
         };
       case "info":
@@ -158,7 +160,13 @@ export default function NotificationsScreen({ navigation }) {
 
     return (
       <TouchableOpacity
-        style={[styles.card, !item.lida && { backgroundColor: theme.light, borderColor: theme.primary + '40' }]}
+        style={[
+          styles.card,
+          !item.lida && {
+            backgroundColor: theme.light,
+            borderColor: theme.primary + "40",
+          },
+        ]}
         onPress={() => handlePress(item.id, item.lida)}
         activeOpacity={0.7}
       >
@@ -174,7 +182,9 @@ export default function NotificationsScreen({ navigation }) {
           <Text style={styles.time}>{date}</Text>
         </View>
 
-        {!item.lida && <View style={[styles.dot, { backgroundColor: theme.primary }]} />}
+        {!item.lida && (
+          <View style={[styles.dot, { backgroundColor: theme.primary }]} />
+        )}
       </TouchableOpacity>
     );
   };
@@ -184,29 +194,41 @@ export default function NotificationsScreen({ navigation }) {
   // --- Modal de Confirmação ---
   const ConfirmationAlert = () => (
     <Modal transparent={true} visible={alertVisible} animationType="fade">
-        <View style={styles.modalOverlay}>
-            <View style={styles.modalContent}>
-                <MaterialCommunityIcons name="trash-can-outline" size={50} color="#D92D20" style={{marginBottom: 10}} />
-                <Text style={styles.modalTitle}>{alertTitle}</Text>
-                <Text style={styles.modalMessage}>{alertMessage}</Text>
-                
-                <View style={styles.modalButtonsRow}>
-                    <TouchableOpacity 
-                        style={[styles.modalButton, { backgroundColor: '#EEE', marginRight: 10 }]} 
-                        onPress={() => setAlertVisible(false)}
-                    >
-                        <Text style={[styles.modalButtonText, { color: '#333' }]}>Cancelar</Text>
-                    </TouchableOpacity>
-                    
-                    <TouchableOpacity 
-                        style={[styles.modalButton, { backgroundColor: '#D92D20' }]} 
-                        onPress={alertAction}
-                    >
-                        <Text style={[styles.modalButtonText, { color: 'white' }]}>Apagar</Text>
-                    </TouchableOpacity>
-                </View>
-            </View>
+      <View style={styles.modalOverlay}>
+        <View style={styles.modalContent}>
+          <MaterialCommunityIcons
+            name="trash-can-outline"
+            size={50}
+            color="#D92D20"
+            style={{ marginBottom: 10 }}
+          />
+          <Text style={styles.modalTitle}>{alertTitle}</Text>
+          <Text style={styles.modalMessage}>{alertMessage}</Text>
+
+          <View style={styles.modalButtonsRow}>
+            <TouchableOpacity
+              style={[
+                styles.modalButton,
+                { backgroundColor: "#EEE", marginRight: 10 },
+              ]}
+              onPress={() => setAlertVisible(false)}
+            >
+              <Text style={[styles.modalButtonText, { color: "#333" }]}>
+                Cancelar
+              </Text>
+            </TouchableOpacity>
+
+            <TouchableOpacity
+              style={[styles.modalButton, { backgroundColor: "#D92D20" }]}
+              onPress={alertAction}
+            >
+              <Text style={[styles.modalButtonText, { color: "white" }]}>
+                Apagar
+              </Text>
+            </TouchableOpacity>
+          </View>
         </View>
+      </View>
     </Modal>
   );
 
@@ -230,7 +252,12 @@ export default function NotificationsScreen({ navigation }) {
       </View>
 
       {unreadCount > 0 && (
-        <View style={[styles.subHeader, { backgroundColor: theme.light, borderColor: theme.primary + '20' }]}>
+        <View
+          style={[
+            styles.subHeader,
+            { backgroundColor: theme.light, borderColor: theme.primary + "20" },
+          ]}
+        >
           <Text style={[styles.subHeaderText, { color: theme.primary }]}>
             Você tem {unreadCount} novas notificações
           </Text>
@@ -248,7 +275,11 @@ export default function NotificationsScreen({ navigation }) {
           renderItem={renderItem}
           contentContainerStyle={styles.listContent}
           refreshControl={
-            <RefreshControl refreshing={refreshing} onRefresh={onRefresh} colors={[theme.primary]} />
+            <RefreshControl
+              refreshing={refreshing}
+              onRefresh={onRefresh}
+              colors={[theme.primary]}
+            />
           }
           ListEmptyComponent={
             <View style={styles.emptyState}>
@@ -332,22 +363,42 @@ const styles = StyleSheet.create({
 
   // Modal
   modalOverlay: {
-      flex: 1,
-      backgroundColor: 'rgba(0,0,0,0.5)',
-      justifyContent: 'center',
-      alignItems: 'center',
+    flex: 1,
+    backgroundColor: "rgba(0,0,0,0.5)",
+    justifyContent: "center",
+    alignItems: "center",
   },
   modalContent: {
-      width: '85%',
-      backgroundColor: 'white',
-      borderRadius: 20,
-      padding: 25,
-      alignItems: 'center',
-      elevation: 5,
+    width: "85%",
+    backgroundColor: "white",
+    borderRadius: 20,
+    padding: 25,
+    alignItems: "center",
+    elevation: 5,
   },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', marginBottom: 10, color: '#333' },
-  modalMessage: { fontSize: 15, color: '#666', textAlign: 'center', marginBottom: 20 },
-  modalButtonsRow: { flexDirection: 'row', width: '100%', justifyContent: 'space-between' },
-  modalButton: { flex: 1, paddingVertical: 12, borderRadius: 10, alignItems: 'center', justifyContent: 'center' },
-  modalButtonText: { fontWeight: 'bold', fontSize: 15 },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: "bold",
+    marginBottom: 10,
+    color: "#333",
+  },
+  modalMessage: {
+    fontSize: 15,
+    color: "#666",
+    textAlign: "center",
+    marginBottom: 20,
+  },
+  modalButtonsRow: {
+    flexDirection: "row",
+    width: "100%",
+    justifyContent: "space-between",
+  },
+  modalButton: {
+    flex: 1,
+    paddingVertical: 12,
+    borderRadius: 10,
+    alignItems: "center",
+    justifyContent: "center",
+  },
+  modalButtonText: { fontWeight: "bold", fontSize: 15 },
 });

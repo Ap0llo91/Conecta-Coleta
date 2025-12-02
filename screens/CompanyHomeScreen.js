@@ -1,46 +1,71 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { 
   View, 
   Text, 
   StyleSheet, 
   ScrollView, 
   TouchableOpacity, 
-  ActivityIndicator 
+  ActivityIndicator,
+  Image
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { MaterialCommunityIcons, Ionicons } from '@expo/vector-icons'; 
 import { supabase } from '../utils/supabaseClient';
+import { useFocusEffect } from '@react-navigation/native';
 
 // Cor Principal da Empresa (Amarelo/Laranja)
 const primaryYellow = '#F0B90B';
 
 export default function CompanyHomeScreen({ navigation }) {
   const [companyName, setCompanyName] = useState('Carregando...');
+  const [photoUrl, setPhotoUrl] = useState(null);
   const [loading, setLoading] = useState(true);
+  
+  const [completedCount, setCompletedCount] = useState(0);
+  const [pendingCount, setPendingCount] = useState(0);
 
-  useEffect(() => {
-    fetchCompanyProfile();
-  }, []);
+  useFocusEffect(
+    useCallback(() => {
+      fetchDashboardData();
+    }, [])
+  );
 
-  const fetchCompanyProfile = async () => {
+  const fetchDashboardData = async () => {
+    setLoading(true);
     try {
       const { data: { user } } = await supabase.auth.getUser();
       
       if (user) {
-        const { data, error } = await supabase
+        // 1. Busca Nome E FOTO da Empresa
+        const { data: userData, error: userError } = await supabase
           .from('usuarios')
-          .select('nome_razao_social')
+          .select('nome_razao_social, foto_url') // <--- foto_url
           .eq('usuario_id', user.id)
           .single();
 
-        if (error) throw error;
-
-        if (data) {
-          setCompanyName(data.nome_razao_social);
+        if (userData) {
+          setCompanyName(userData.nome_razao_social);
+          setPhotoUrl(userData.foto_url); // <--- SALVA A FOTO
         }
+
+        // 2. Busca Contagem de Chamados
+        const { count: concluidos } = await supabase
+          .from('chamados')
+          .select('*', { count: 'exact', head: true })
+          .eq('usuario_id', user.id)
+          .in('status', ['finalizado', 'FINALIZADO', 'Finalizado', 'Concluído']); 
+
+        const { count: pendentes } = await supabase
+          .from('chamados')
+          .select('*', { count: 'exact', head: true })
+          .eq('usuario_id', user.id)
+          .in('status', ['pendente', 'PENDENTE', 'Pendente', 'Em Análise']);
+
+        setCompletedCount(concluidos || 0);
+        setPendingCount(pendentes || 0);
       }
     } catch (error) {
-      console.log('Erro ao buscar perfil:', error);
+      console.log('Erro ao buscar dados do dashboard:', error);
       setCompanyName('Empresa');
     } finally {
       setLoading(false);
@@ -95,9 +120,22 @@ export default function CompanyHomeScreen({ navigation }) {
       {/* Cabeçalho Amarelo */}
       <SafeAreaView edges={['top']} style={styles.header}>
         <View style={styles.headerContent}>
-          <View style={styles.headerIconBg}>
-            <MaterialCommunityIcons name="office-building" size={24} color="#333" />
-          </View>
+          
+          {/* LÓGICA DA FOTO AQUI */}
+          <TouchableOpacity onPress={() => navigation.navigate('Meu Perfil')}>
+            <View style={styles.headerIconBg}>
+              {photoUrl ? (
+                <Image 
+                  source={{ uri: photoUrl }} 
+                  style={styles.profileImage} 
+                  resizeMode="cover"
+                />
+              ) : (
+                <MaterialCommunityIcons name="office-building" size={24} color="#333" />
+              )}
+            </View>
+          </TouchableOpacity>
+
           <View>
             <Text style={styles.welcomeLabel}>Bem-vindo</Text>
             <Text style={styles.companyName} numberOfLines={1}>
@@ -126,14 +164,13 @@ export default function CompanyHomeScreen({ navigation }) {
           onPress={() => navigation.navigate('ServicesEmpresa')} 
         />
 
-        {/* CORREÇÃO AQUI: Linkando para a tela de Grande Volume */}
         <ActionCard 
           title="Grande Volume"
           description="Coleta de recicláveis e resíduos em grande quantidade"
           icon="trash-can-outline" 
           color="#43A047" 
           iconLib="MaterialCommunityIcons"
-          onPress={() => navigation.navigate('RequestLargeVolume')} // Corrigido!
+          onPress={() => navigation.navigate('RequestLargeVolume')} 
         />
 
         <ActionCard 
@@ -150,29 +187,29 @@ export default function CompanyHomeScreen({ navigation }) {
         <View style={styles.statusRow}>
           <StatusCard 
             label="Coletas Realizadas" 
-            count="12" 
-            color="#43A047" // Verde
+            count={completedCount} 
+            color="#43A047"
             icon="file-check-outline" 
             bgColor="#E8F5E9" 
           />
           <View style={{ width: 15 }} />
           <StatusCard 
             label="Pendentes" 
-            count="2" 
-            color="#E65100" // Laranja Escuro
+            count={pendingCount} 
+            color="#E65100"
             icon="clock-time-four-outline" 
             bgColor="#FFF3E0" 
           />
         </View>
 
         {/* 3. Cartão: Certificados */}
-        <TouchableOpacity style={styles.certCard} onPress={() => alert('Abrir Certificados')}>
+        <TouchableOpacity style={styles.certCard} onPress={() => navigation.navigate('Certificates')}>
           <View style={{flexDirection: 'row', alignItems: 'flex-start'}}>
             <MaterialCommunityIcons name="file-certificate-outline" size={32} color="#ACA183" style={{marginTop: 2}} />
             <View style={{marginLeft: 15, flex: 1}}>
                <Text style={styles.certTitle}>Certificados Disponíveis</Text>
                <Text style={styles.certDesc}>
-                 Você tem 3 certificados de destinação final prontos para download.
+                 Acesse e baixe seus comprovantes de destinação final (CDF).
                </Text>
                <Text style={styles.certLink}>Ver Certificados →</Text>
             </View>
@@ -228,6 +265,13 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     marginRight: 15,
+    overflow: 'hidden',
+  },
+  // Estilo da imagem de perfil
+  profileImage: {
+    width: 48,
+    height: 48,
+    borderRadius: 24,
   },
   welcomeLabel: {
     fontSize: 14,

@@ -6,7 +6,7 @@ import {
   TouchableOpacity,
   StyleSheet,
   ScrollView,
-  Modal, // Importado
+  Modal,
   KeyboardAvoidingView,
   Platform,
 } from "react-native";
@@ -135,7 +135,7 @@ const LoginForm = ({ navigation }) => {
       setLoading(false);
       return;
     }
-    // Sucesso é tratado pelo onAuthStateChange no App.js
+
   };
 
   return (
@@ -203,6 +203,7 @@ const LoginForm = ({ navigation }) => {
 const RegisterForm = ({ navigation }) => {
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
   const [nome, setNome] = useState("");
 
   // Estados formatados
@@ -218,7 +219,7 @@ const RegisterForm = ({ navigation }) => {
 
   const [loading, setLoading] = useState(false);
 
-  // Estados do Alerta Bonito
+  // Estados do Alerta
   const [alertVisible, setAlertVisible] = useState(false);
   const [alertTitle, setAlertTitle] = useState("");
   const [alertMessage, setAlertMessage] = useState("");
@@ -282,7 +283,8 @@ const RegisterForm = ({ navigation }) => {
       (!numero && !semNumero) ||
       !nome ||
       !email ||
-      !password
+      !password ||
+      !confirmPassword // Valida se campo de confirmação está vazio
     ) {
       showAlert(
         "Campos Incompletos",
@@ -292,7 +294,27 @@ const RegisterForm = ({ navigation }) => {
       return;
     }
 
-    // 2. Validação de CPF REAL (MANTIDA)
+    // 2. Validação de Senha (mínimo 6 caracteres)
+    if (password.length < 6) {
+        showAlert(
+            "Senha Curta",
+            "A senha deve ter no mínimo 6 caracteres.",
+            "warning"
+        );
+        return;
+    }
+
+    // --- COMPARAÇÃO DE SENHAS ---
+    if (password !== confirmPassword) {
+        showAlert(
+            "Senhas não conferem",
+            "A senha e a confirmação de senha estão diferentes.",
+            "warning"
+        );
+        return;
+    }
+
+    // 3. Validação de CPF REAL
     if (!validateCPF(cpf)) {
       showAlert(
         "CPF Inválido",
@@ -309,6 +331,13 @@ const RegisterForm = ({ navigation }) => {
     const { data: authData, error: authError } = await supabase.auth.signUp({
       email,
       password,
+      // Tenta enviar metadados para agilizar o App.js
+      options: {
+        data: {
+            tipo_usuario: 'CPF',
+            nome: nome
+        }
+      }
     });
 
     if (authError) {
@@ -363,6 +392,8 @@ const RegisterForm = ({ navigation }) => {
     }
 
     setLoading(false);
+    
+    await supabase.auth.refreshSession();
     
     // Alerta de Sucesso
     setAlertTitle("Sucesso!");
@@ -420,7 +451,7 @@ const RegisterForm = ({ navigation }) => {
         maxLength={16}
       />
 
-      {/* Seção de Endereço Atualizada com CEP */}
+      {/* Seção de Endereço com CEP */}
       <Text style={[styles.sectionHeader, { marginTop: 10 }]}>Endereço</Text>
 
       <Text style={styles.label}>CEP</Text>
@@ -479,13 +510,23 @@ const RegisterForm = ({ navigation }) => {
       />
 
       <Text style={[styles.sectionHeader, { marginTop: 10 }]}>Acesso</Text>
-      <Text style={styles.label}>Senha</Text>
+      <Text style={styles.label}>Senha (Min. 6 caracteres)</Text>
       <TextInput
         style={styles.input}
         placeholder="••••••••"
         secureTextEntry
         value={password}
         onChangeText={setPassword}
+      />
+
+      {/* --- CAMPO NOVO: CONFIRMAR SENHA --- */}
+      <Text style={styles.label}>Confirmar Senha</Text>
+      <TextInput
+        style={styles.input}
+        placeholder="••••••••"
+        secureTextEntry
+        value={confirmPassword}
+        onChangeText={setConfirmPassword}
       />
 
       <TouchableOpacity
@@ -512,7 +553,6 @@ const RegisterForm = ({ navigation }) => {
   );
 };
 
-// --- Componente Reutilizável de Alerta Bonito (Azul para Cidadão) ---
 const CustomAlert = ({ visible, title, message, type, onClose }) => {
     let iconName = 'alert-circle';
     let color = '#D92D20'; // Vermelho (Erro)
@@ -525,7 +565,6 @@ const CustomAlert = ({ visible, title, message, type, onClose }) => {
         color = '#2ECC71'; // Verde (Sucesso)
     }
 
-    // Se for sucesso, podemos usar o azul do app no botão, senão usa a cor do tipo
     const buttonColor = type === 'success' ? primaryBlue : color;
 
     return (
