@@ -17,7 +17,7 @@ import { supabase } from "../utils/supabaseClient";
 // Cor Principal (Azul)
 const primaryBlue = "#007BFF";
 
-// --- FUNÇÃO DE VALIDAÇÃO DE CPF (Algoritmo Oficial) ---
+// --- FUNÇÃO DE VALIDAÇÃO DE CPF(Algoritmo Oficial) ---
 const validateCPF = (cpf) => {
   // Remove caracteres não numéricos
   cpf = cpf.replace(/[^\d]+/g, "");
